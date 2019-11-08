@@ -45,19 +45,7 @@ library(umap)
 library(gplots)
 source('cusanovich2018_lib.r')
 
-
-  # inputs
-outdir = 'results/'
-
-
-
-        # set directories
-        system(paste0('mkdir -p ', outdir, '/data'))
-        system(paste0('mkdir -p ', outdir, '/data/'))
-        system(paste0('mkdir -p ', outdir, '/general'))
-        pdf(paste0(outdir, 'general/', 'P3_identify_clades.pdf'))
-
-
+pdf('P3_identify_clades.pdf')
 
 #### Load window coverage per cell into a matrix
 ## Read genome windows and merge
@@ -98,7 +86,6 @@ for ( i in 1:length(files)) {
 }
 
 
-# write.table(M, file=paste0(outdir, 'data/thetable.txt'), sep="\t", quote=FALSE, row.names=TRUE, col.names=TRUE)
 print("Stage 1 M loading")
 
 

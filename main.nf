@@ -33,6 +33,8 @@
      For w5k files generated in-pipeline do the same?
      After that make sure caching still works.
 
+   - encode sample name in R script output.
+
    # Note: singularity used for R clustering process and for macs2.
 
    ? input tag to encode parameters, use in output dir? User could this outside pl.
@@ -179,6 +181,8 @@ process cells_window_coverage_P2 {         /* P2 process cusanovich2018.P2.windo
 
 process clusters_define_cusanovich2018_P3 {
 
+  publishDir "$params.outdir/qc", pattern: '*.pdf', method: 'link'
+
   input:
   file('genome_w5kbed') from ch_genomebed_P3
   file('cellcoverage/*') from ch_cellcoverage_P3.flatMap().collect()
@@ -186,6 +190,7 @@ process clusters_define_cusanovich2018_P3 {
   output:
   file('cus_P3_M.rds') into ch_Px_rds
   file('cus_P3_clades.tsv') into ch_P4_clades
+  file('*.pdf')
 
   shell:
   '''

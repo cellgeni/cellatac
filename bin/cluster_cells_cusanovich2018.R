@@ -151,10 +151,7 @@ message('Dimension reduction')
 # Here, we only retain components 2-n_pcs (component 1 is highly correlated with read depth) 
 # This step can take a minute
 set.seed(0) #For reproducibility
-print(tf_idf_counts)
-print("before")
 SVD = irlba(tf_idf_counts, n_pcs, n_pcs)
-print("after")
 sk_diag = matrix(0, nrow = n_pcs, ncol = n_pcs)
 diag(sk_diag) = SVD$d
 # remove component 1 as suggested

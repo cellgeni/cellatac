@@ -30,13 +30,11 @@
 
      In the P6 scripts these seem to be made again, same as in P2 script.
 
-   ! The pipeline is perhaps too wasteful still in copying links to cell files around.
-     consider just passing metafiles with locations around.
-     To make it work with buffering: maybe neatest to pass cell tags/names/barcodes
-     around and reconstruct input bam files on the fly from cellbamdir.
-     For w5k files generated in-pipeline do the same?
-     After that make sure caching still works.
-   -> pass meta file to R script in clusters_define_cusanovich2018_P3
+   - the pipeline chunks cells into batches in a few places, using meta files
+     of bam locations.
+     The cluster R script stages all w5k.txt files in single directory;
+     this can be changed to a meta file (constructed with collectFile).
+     Need to change the R script input reading.
 
    - encode sample name in R script output.
 

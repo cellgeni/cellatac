@@ -6,10 +6,6 @@
 #
 
 
-# TODO: make this useful also outside NF.
-# This means supplying it perhaps with command line arguments.
-
-
 theargs <- R.utils::commandArgs(asValues=TRUE)
 
 N_clades = 10 # Number of expected cell clusters
@@ -100,27 +96,6 @@ for ( i in 1:length(files)) {
   barcode = cell_barcodes[i]
   M[idx, barcode] = d$V4
 }
-
-
-# hierverder. writing matrix does not work.  actual goal is to insepct this error:
-#  TF-IDF transformation
-#  Dimension reduction
-#  Error in irlba(tf_idf_counts, n_pcs, n_pcs) : 
-#    starting vector near the null space
-#  Execution halted
-
-# the object looks like this:
-#242506 x 100 Matrix of class "dgeMatrix"
-#                              w5k w5k w5k w5k w5k w5k w5k w5k w5k w5k w5k w5k
-#chr1_10000_15000     1.903095e-05 NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
-#chr1_15000_20000     1.903095e-05 NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
-#chr1_20000_25000     1.903095e-05 NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
-#chr1_25000_30000     1.903095e-05 NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
-#chr1_30000_35000     1.903095e-05 NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
-#chr1_35000_40000     1.903095e-05 NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
-#chr1_40000_45000     1.903095e-05 NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
-#chr1_55000_60000     1.903095e-05 NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN
-# this is pbb the tf_idf_counts object.
 
 
 # write.table(M, file=paste0(outdir, 'data/thetable.txt'), sep="\t", quote=FALSE, row.names=TRUE, col.names=TRUE)

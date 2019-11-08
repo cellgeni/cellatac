@@ -8,6 +8,10 @@
 
 /* Example input creation:
    samtools view -h -o - sample_pb.bam | samdemux.pl --barcodefile=barcode100.txt --outdir=d100
+   cd d100
+   parallel -j 8 sam2bam.sh ::: *-1.sam
+   rm -f *.sam
+
      Then:
    full path name to  |   is argument to option
 ----------------------+--------------------------------------
@@ -32,6 +36,7 @@
      around and reconstruct input bam files on the fly from cellbamdir.
      For w5k files generated in-pipeline do the same?
      After that make sure caching still works.
+   -> pass meta file to R script in clusters_define_cusanovich2018_P3
 
    - encode sample name in R script output.
 
@@ -66,10 +71,14 @@ if (!params.psbam || !params.cellfile || !params.cellbamdir) {
   exit 1, "Please supply --psbam and --cellfile --cellbamdir with arguments"
 }
 
-Channel.fromPath(params.cellfile).set { ch_get_cells }
+Channel.fromPath(params.cellfile).until { true}. set { ch_get_cells }
+
+Channel.fromPath(params.cellfile).until { false}.set { ch_get_cells2 }
 
 
 process genome_make_windows {
+
+  tag  "${f_chromsizes}"
 
   publishDir "${params.outdir}/genome", method: 'copy'
   input:
@@ -87,6 +96,8 @@ process genome_make_windows {
 
 
 process posbam_prepare_info {
+
+  tag  "${f_psb}"
 
   publishDir "$params.outdir/sample"
 
@@ -128,16 +139,16 @@ process posbam_prepare_info {
   '''
 }
 
-
 process cells_get_files {
 
     tag "${file_cellnames}"
+
     errorStrategy 'terminate'
 
     input:
-        file file_cellnames from ch_get_cells
+        file file_cellnames from ch_get_cells2
     output:
-        file '*.bam' into ch_cellbams_coverage, ch_cellbams_peaks, ch_clusbams
+        file 'themetafile' into ch_cellbams_chunk, ch_clusbams2
 
     shell:
     '''
@@ -147,45 +158,54 @@ process cells_get_files {
         echo "Bam file $bam not found"
         false
       else
-        ln $bam .
+        echo -e "$cellname\t$bam"
       fi
-    done < !{file_cellnames}
+    done < !{file_cellnames} > themetafile
     '''
 }
 
+ch_cellbams_chunk
+   .splitText(by: params.cellbatchsize, file: "celllist.")
+   .into{ch_cellbams_coverage2; ch_cellbams_peaks2}
+
 
 process cells_window_coverage_P2 {         /* P2 process cusanovich2018.P2.windowcount.sh */
+
+  tag "${cellbam_list}"
 
   publishDir "$params.outdir/cells"
 
   input:
       file sample_w5ksorted from ch_sample_w5ksorted.collect()
       file sample_chrlen    from ch_chrom_length.collect()
-      file cellbam_list from ch_cellbams_coverage.flatMap()
-        .buffer(size: params.cellbatchsize, remainder: true)
+      file cellbam_list from ch_cellbams_coverage2
 
   output:
     file('*.txt') into ch_cellcoverage_P3
 
   shell:
   '''
-  for cellbam in !{cellbam_list}; do
+  while read cellname cellbam; do
     bedtools coverage -sorted -header \\
       -a !{sample_w5ksorted}      \\
       -b $cellbam                 \\
-      -g !{sample_chrlen} | awk -F"\\t" '{if($4>0) print $0}' > ${cellbam%.bam}.w5k.txt
-  done
+      -g !{sample_chrlen} | awk -F"\\t" '{if($4>0) print $0}' > $cellname.w5k.txt
+  done < !{cellbam_list}
   '''
 }
 
 
 process clusters_define_cusanovich2018_P3 {
 
+  tag "bottleneck"
+
   publishDir "$params.outdir/qc", pattern: '*.pdf', method: 'link'
 
   input:
   file('genome_w5kbed') from ch_genomebed_P3
   file('cellcoverage/*') from ch_cellcoverage_P3.flatMap().collect()
+
+        // NOTE / TODO. we could generate a meta file and pass this to the R script.
 
   output:
   file('cus_P3_M.rds') into ch_Px_rds
@@ -207,14 +227,11 @@ process clusters_define_cusanovich2018_P3 {
 
 process clusters_index_P4 {
 
+  tag "${cladefile}"
             // fixme using old idiom for channels, but now have a list. as a hack I flatmap it.
             // so that I can then use collectFile.
   input:
-  file metafile from ch_clusbams
-    .flatMap()
-    .map { it.toString() + "\t" + (it.baseName - '.bam') }
-    .collectFile(name: 'sc.bamlist.txt', newLine: true)
-
+  file metafile from ch_clusbams2
   file cladefile from ch_P4_clades
 
   output:
@@ -233,6 +250,8 @@ process clusters_index_P4 {
 
 process clusters_makebam_P4 {
 
+  tag "${clustag}"
+
   /* TODO: insert clade,pcs,ntfs in output directory name? */
   publishDir "${params.outdir}/clusbam"
 
@@ -250,6 +269,8 @@ process clusters_makebam_P4 {
 
 
 process clusters_macs2_P4 {
+
+  tag "${clustag}"
 
   publishDir "${params.outdir}/macs2"
 
@@ -277,6 +298,8 @@ process clusters_macs2_P4 {
 
 process peaks_masterlist {
 
+  tag "masterlist"
+
   publishDir "${params.outdir}/peaks"
 
   input:
@@ -302,26 +325,27 @@ process peaks_masterlist {
 
 process masterlist_cells_count {
 
+  tag "${cellbam_list}"
+
   publishDir "${params.outdir}/mp_counts"
 
   input:
   file(masterbed_sps) from ch_masterbed_sps.collect()
   file sample_chrlen from ch_chrom_length2.collect()
 
-  file(cellbam_list) from ch_cellbams_peaks.flatMap()
-        .buffer(size: params.cellbatchsize, remainder: true)
+  file(cellbam_list) from ch_cellbams_peaks2
 
   output:
   file('*.mp.txt')
 
   shell:
   '''
-  for cellbam in !{cellbam_list}; do
-    bedtools coverage               \
-    -a !{masterbed_sps}             \
-    -b $cellbam -sorted -header    \
-    -g !{sample_chrlen} | awk -F"\t" '{if($4>0) print $0}' > ${cellbam%.bam}.mp.txt
-  done
+  while read cellname cellbam; do
+    bedtools coverage               \\
+    -a !{masterbed_sps}             \\
+    -b $cellbam -sorted -header     \\
+    -g !{sample_chrlen} | awk -F"\t" '{if($4>0) print $0}' > $cellname.mp.txt
+  done < !{cellbam_list}
   '''
 }
 

@@ -12,7 +12,7 @@ open(BAMLIST, "<$bamlistfile") || die "no list";
 
 my %lists = ();
 
-my %tag2file = map { chomp; reverse(split) } <BAMLIST>;
+my %tag2file = map { chomp; split } <BAMLIST>;
 
 while (<CLADES>) {
   chomp;

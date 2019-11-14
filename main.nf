@@ -25,18 +25,20 @@
 
 /* NOTES/TODO/QUESTIONS
 
+   - make samdemux.nf for demultiplexing, converting to bed, and creating fai
+
+   - do we need f_psbed? See todo near it.
+
    - We now pass in the possorted bed file.
      For the psbed and psbam files, do we need to subset only those reads that belong to is__cell_barcode cells?
 
-   ! these look nearly identical:
+   ! these look nearly identical (check prepare step):
      *  possorted_bam.genome.txt
      *  possorted_bam.chromosomes.txt
           there is also the file
-     *  hg38.chrom.size
+     *  hg38.chrom.size in assets; check how it's used, especially relative to sorting requirement.
 
      In the P6 scripts these seem to be made again, same as in P2 script.
-
-   - in bedtools intersect, can we use the bam file instead of the bed file?
 
    - the pipeline chunks cells into batches in a few places, using meta files
      of bam locations.
@@ -134,7 +136,8 @@ process posbam_prepare_info {
   #   | cut -f 1-3 | uniq > !{sample}.bed
   # CHANGE: we now assume this has been done beforehand.
 
-  # nf-NOTES below I'm not yet encoding the genome tag in the output file.          #   !{sample}.w5k.bed
+  # Intersect genome-wide windows to filter out regions that are not in the read data
+  # TODO do we gain much from this? (measure how quick it is and how many windows we lose).
   # 1b.2
   bedtools intersect -a !{gw5k} -b !{f_psbed} -wa | uniq > !{sample}.w5k.bed
 

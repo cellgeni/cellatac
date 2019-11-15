@@ -7,6 +7,7 @@
 */
 
 /* Example input creation (barcode file creation omitted):
+   samtools index atac_v1_pbmc_10k_possorted_bam
    samtools view -s 0.05 atac_v1_pbmc_10k_possorted_bam.bam > sample_pb.bam
    samtools view -h -o - sample_pb.bam | samdemux.pl --barcodefile=barcode100.txt --outdir=d100
    bedtools bamtobed -i sample_pb.bam  | cut -f 1-3 | uniq > sample_pb.bed
@@ -27,7 +28,7 @@
 
    - make samdemux.nf for demultiplexing, converting to bed, and creating fai
 
-   - do we need f_psbed? See todo near it.
+   - do we need f_psbed? it is to reduce #windows, but perhaps not needed. See todo near it.
 
    - We now pass in the possorted bed file.
      For the psbed and psbam files, do we need to subset only those reads that belong to is__cell_barcode cells?
@@ -94,7 +95,7 @@ process genome_make_windows {
   set val(gntag), file(f_chromsizes) from Channel.from([[params.genome, file(params.chromsizes)]])
 
   output:
-  file '*.bed' into ch_genome_w5k, ch_genomebed_P3
+  file '*.bed' into ch_genome_w5k, ch_genomebed_P3, ch_genomebed_P3_B
   
   shell:
   '''
@@ -192,7 +193,7 @@ process cells_window_coverage_P2 {         /* P2 process cusanovich2018.P2.windo
       file cellbam_list from ch_cellbams_coverage2
 
   output:
-    file('*.txt') into ch_cellcoverage_P3
+    file('*.txt') into (ch_cellcoverage_P3, ch_cellcoverage_P3_B)
 
   shell:
   '''
@@ -202,6 +203,40 @@ process cells_window_coverage_P2 {         /* P2 process cusanovich2018.P2.windo
       -b $cellbam                 \\
       -g !{sample_chrlen} | awk -F"\\t" '{if($4>0) print $0}' > $cellname.w5k.txt
   done < !{cellbam_list}
+  '''
+}
+
+
+process clusters_define_cusanovich2018_P3_B {
+
+  tag "bottleneck"
+
+  publishDir "$params.outdir/qc", pattern: '*.pdf', method: 'link'
+
+  input:
+  file('genome_w5kbed') from ch_genomebed_P3_B
+  file('cellcoverage/*') from ch_cellcoverage_P3_B.flatMap().collect()
+
+//  output:
+//  file('cus_P3_M.rds') into ch_Px_rds
+//  file('cus_P3_clades.tsv') into ch_P4_clades
+//  file('*.pdf')
+                      // fixme hardcoded 20000
+  shell:          
+  '''
+  mkdir matrix
+  cd matrix
+  cellatac_top_region.sh -g ../genome_w5kbed -i ../cellcoverage/ -n 20000
+  cd ..
+
+  ln -s !{baseDir}/bin/cusanovich2018_lib.r .
+  R --slave --quiet --no-save --args  \\
+  --nclades=!{params.nclades}         \\
+  --npcs=!{params.npcs}               \\
+  --matrix=matrix/mtx.gz              \\
+  --regions=matrix/regions20000.txt   \\
+  --cells=matrix/cells.txt            \\
+  < !{baseDir}/bin/cluster2_cells_cusanovich2018.R
   '''
 }
 

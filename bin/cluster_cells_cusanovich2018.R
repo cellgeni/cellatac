@@ -95,6 +95,7 @@ binary_mat = (M > 0) + 0
 saveRDS(binary_mat, file = 'cus_P3_M.rds')
 binary_mat       = readRDS('cus_P3_M.rds')
 n_cells_with_site = rowSums(binary_mat)
+
 options(repr.plot.width = 8, repr.plot.height = 4)
 par(mfrow = c(1, 2))
 hist(log10(n_cells_with_site), main = 'No. of Cells Each Site is Observed In', breaks = 50)
@@ -102,6 +103,9 @@ hist(log10(n_cells_with_site), main = 'No. of Cells Each Site is Observed In', b
 
 print("Stage 2 M loading")
 
+
+      mysel = n_cells_with_site >= n_cells_with_site[order(n_cells_with_site, decreasing = T)[ top_freq_sites ]]
+      print(n_cells_with_site[mysel])
 
 # TODO: catch when there are not enough sites.
 #### Filter bins
@@ -113,6 +117,11 @@ f_binary_mat =  binary_mat[ which(
 print(dim(f_binary_mat))
 n_sites_per_cell = colSums(f_binary_mat)
 f_binary_mat = f_binary_mat[rowSums(f_binary_mat) > 0, ]
+
+writeMM(f_binary_mat, "check.mtx")
+  message('foo')
+  #print(colSums(f_binary_mat))
+  #print(rowSums(f_binary_mat))
 print(dim(f_binary_mat))
 print(sum(f_binary_mat > 0))
 hist(log10(n_sites_per_cell), main = 'Number of Sites Each Cell Uses', breaks = 50)

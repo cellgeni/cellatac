@@ -217,10 +217,9 @@ process clusters_define_cusanovich2018_P3_B {
   file('genome_w5kbed') from ch_genomebed_P3_B
   file('cellcoverage/*') from ch_cellcoverage_P3_B.flatMap().collect()
 
-//  output:
-//  file('cus_P3_M.rds') into ch_Px_rds
-//  file('cus_P3_clades.tsv') into ch_P4_clades
-//  file('*.pdf')
+  output:
+  file('cus_P3_clades.tsv') into ch_P4_clades
+  file('*.pdf')
                       // fixme hardcoded 20000
   shell:          
   '''
@@ -253,10 +252,9 @@ process clusters_define_cusanovich2018_P3 {
 
         // NOTE / TODO. we could generate a meta file and pass this to the R script.
 
-  output:
-  file('cus_P3_M.rds') into ch_Px_rds
-  file('cus_P3_clades.tsv') into ch_P4_clades
-  file('*.pdf')
+//  output:
+//  file('cus_P3_clades.tsv') into ch_P4_clades
+//  file('*.pdf')
 
   shell:
   '''

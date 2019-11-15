@@ -66,6 +66,7 @@ params.outdir        =  'results'
 params.cellbamdir    =   null
 params.psbam         =   null
 params.psbed         =   null
+params.psbai         =   null
 params.sampleid      =  'thesamp'
 params.cellfile      =  null
 
@@ -81,9 +82,7 @@ if (!params.psbam || !params.psbed || !params.cellfile || !params.cellbamdir) {
   exit 1, "Please supply --psbam --psbed --cellfile --cellbamdir each with argument"
 }
 
-Channel.fromPath(params.cellfile).until { true}. set { ch_get_cells }
-
-Channel.fromPath(params.cellfile).until { false}.set { ch_get_cells2 }
+Channel.fromPath(params.cellfile).until { false}.set { ch_get_cells }
 
 
 process genome_make_windows {
@@ -112,7 +111,7 @@ process posbam_prepare_info {
   publishDir "$params.outdir/sample"
 
   input:
-  set val(gntag), val(sample), file(f_psbam), file(f_psbed) from Channel.from([[params.genome, params.sampleid, file(params.psbam), file(params.psbed)]])
+  set val(gntag), val(sample), file(f_psbam), file(f_psbed), file(f_psbai) from Channel.from([[params.genome, params.sampleid, file(params.psbam), file(params.psbed), file(params.psbai)]])
   file(gw5k) from ch_genome_w5k
 
   output:
@@ -139,11 +138,24 @@ process posbam_prepare_info {
 
   # Intersect genome-wide windows to filter out regions that are not in the read data
   # TODO do we gain much from this? (measure how quick it is and how many windows we lose).
+  # Now doing this. Original code first:
   # 1b.2
-  bedtools intersect -a !{gw5k} -b !{f_psbed} -wa | uniq > !{sample}.w5k.bed
+  # bedtools intersect -a !{gw5k} -b !{f_psbed} -wa | uniq > !{sample}.w5k.bed
+  # ^^^^^^^^^^^^^^^^^^^^^^ original code, seems to take a long time.
+  # See below for new code.
+  # The old code led to a small reduction in number of windows (<10%).
+  # The new code is much much faster. Empty windows should still be lost at the clustering stage.
+
+  # If we simply copy the source to the destination:
+  # cp !{gw5k} !{sample}.w5k.bed
+  # Then there may be chromosome names in the first not occurring in the latter.
+  # So, let's grep the chromosome names from the idxstats, which we'll compute first.
 
   # 1b.3                                                                            #   !{sample}.idxstats
   samtools idxstats !{f_psbam} | cut -f 1-2 | uniq > !{sample}.idxstats
+
+  # 1b.2                                                                            #   !{sample}.idxstats
+  grep -Fwf <(cut -f 1 !{sample}.idxstats) !{gw5k} > !{sample}.w5k.bed
 
   # Order the windows bed file as it is in the chromosomes file
   # 1b.4                                                                            #   !{sample}.w5ksorted.bed
@@ -158,7 +170,7 @@ process cells_get_files {
     errorStrategy 'terminate'
 
     input:
-        file file_cellnames from ch_get_cells2
+        file file_cellnames from ch_get_cells
     output:
         file 'themetafile' into ch_cellbams_chunk, ch_clusbams2
 

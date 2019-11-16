@@ -82,7 +82,8 @@ if (!params.psbam || !params.psbed || !params.cellfile || !params.cellbamdir) {
   exit 1, "Please supply --psbam --psbed --cellfile --cellbamdir each with argument"
 }
 
-Channel.fromPath(params.cellfile).until { false}.set { ch_get_cells }
+// Channel.fromPath(params.cellfile).until { false}.set { ch_get_cells }
+thecellfile = file(params.cellfile)
 
 
 process genome_make_windows {
@@ -170,7 +171,7 @@ process cells_get_files {
     errorStrategy 'terminate'
 
     input:
-        file file_cellnames from ch_get_cells
+        file file_cellnames from thecellfile
     output:
         file 'themetafile' into ch_cellbams_chunk, ch_clusbams2
 
@@ -227,7 +228,9 @@ process clusters_define_cusanovich2018_P3_B {
 
   input:
   file('genome_w5kbed') from ch_genomebed_P3_B
-  file('cellcoverage/*') from ch_cellcoverage_P3_B.flatMap().collect()
+  file('cellnames.txt') from thecellfile
+  file metafile from ch_cellcoverage_P3_B.flatMap { ls -> ls.collect{ it.toString() } }.collectFile(name: 'cov.inputs', newLine: true)
+  // file('cellcoverage/*') from ch_cellcoverage_P3_B.flatMap().collect()
 
   output:
   file('cus_P3_clades.tsv') into ch_P4_clades
@@ -237,7 +240,8 @@ process clusters_define_cusanovich2018_P3_B {
   '''
   mkdir matrix
   cd matrix
-  cellatac_top_region.sh -g ../genome_w5kbed -i ../cellcoverage/ -n 20000
+  #cellatac_top_region.sh -g ../genome_w5kbed -i ../cellcoverage/ -n 20000
+  cellatac_top_region.sh -c ../cellnames.txt -g ../genome_w5kbed -I ../cov.inputs -n cellnames.txt -n 20000
   cd ..
 
   ln -s !{baseDir}/bin/cusanovich2018_lib.r .

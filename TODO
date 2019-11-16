@@ -1,0 +1,19 @@
+
+-  final output in matrixmarket format?
+
+- -n argument to cellatac script; check/select only the files that are there, i.e.
+  cope with drop-outs. currently expects all cells/barcodes to succeed.
+  need to comapre with cov.inputs
+  check more generally in the pipeline that it is permissive this way.
+
+- write samdemux.nf
+
+- layer docker file?
+    need mcl and datamash on top of R image.
+
+# collect coverage files in meta file list with locations rather than linking.
+
+# write matrix in old R script.  compare.
+
+
+

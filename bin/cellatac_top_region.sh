@@ -16,17 +16,25 @@
 set -euo pipefail
 
 inputdir=
+filelist=
 genomefile=
 force=false
 num_sites=20000
+cellnames=
 fTAG=
 
 
-while getopts :g:i:n:Fh opt
+while getopts :g:c:i:I:n:Fh opt
 do
     case "$opt" in
+    c)
+      cellnames=$OPTARG
+      ;;
     i)
       inputdir=$OPTARG
+      ;;
+    I)
+      filelist=$OPTARG
       ;;
     g)
       genomefile=$OPTARG
@@ -39,8 +47,10 @@ do
       ;;
     h)
       cat <<EOU
+-c cell ID file (barcodes usually; one id per line)
 -g genome window file
 -i input directory with bed coverage files
+-I file with file locations inside, one file per line, full path name
 -F force first time-consuming step even if result file is present
 -n number of sites to consider (default $num_sites)
 EOU
@@ -53,8 +63,9 @@ EOU
    esac
 done
 
-if [[ -z $inputdir || -z $genomefile ]]; then
-   echo "Need -i inputdir and -g genomefile! (see -h)"
+# if [[ -z $inputdir || -z $genomefile ]]; then
+if [[ -z $filelist || -z $genomefile ]]; then
+   echo "Need -I filelistfile and -g genomefile! (see -h)"
    false
 fi
 
@@ -65,7 +76,8 @@ export fTAG
 
 perl -ane 'local $"="_"; $i=$.-1; print "$i\t@F[0..2]\n"' $genomefile > win.tab
 
-(cd $inputdir && ls -1 *.w5k.txt) | cut -f 1 -d '.' | nl -v0 -nln -w1 > cell.tab
+# (cd $inputdir && ls -1 *.w5k.txt) | cut -f 1 -d '.' | nl -v0 -nln -w1 > cell.tab
+nl -v0 -nln -w1 < $cellnames > cell.tab
 
 export MCLXIOFORMAT=8   # force native binary format, it's 20-30 times faster.
 
@@ -74,15 +86,16 @@ export MCLXIOFORMAT=8   # force native binary format, it's 20-30 times faster.
 #   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 if $force || ! -e cell2win.mcx; then
 
-  for f in $inputdir/*.w5k.txt; do
+  # for f in $inputdir/*.w5k.txt; do
+  while read f; do
 
     g=${f##*/}
     export b=${g%.w5k.txt}
 
     perl -ane 'local $"="_"; print "$ENV{b}\t@F[0..2]\t$F[3]\n"' $f
 
-  done | \
-  mcxload --stream-split -abc - -strict-tabc cell.tab -strict-tabr win.tab --write-binary -o cell2win.mcx
+  done < "$filelist" | mcxload \
+          --stream-split -abc - -strict-tabc cell.tab -strict-tabr win.tab --write-binary -o cell2win.mcx
 else
 >&2 echo "Reusing cell2win.mcx"
 fi

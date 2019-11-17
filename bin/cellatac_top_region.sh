@@ -15,29 +15,25 @@
 
 set -euo pipefail
 
-inputdir=
 filelist=
-genomefile=
+windowfile=
 force=false
 num_sites=20000
 cellnames=
 fTAG=
 
 
-while getopts :g:c:i:I:n:Fh opt
+while getopts :w:c:i:I:n:Fh opt
 do
     case "$opt" in
     c)
       cellnames=$OPTARG
       ;;
     i)
-      inputdir=$OPTARG
-      ;;
-    I)
       filelist=$OPTARG
       ;;
-    g)
-      genomefile=$OPTARG
+    w)
+      windowfile=$OPTARG
       ;;
     n)
       num_sites=$OPTARG
@@ -48,9 +44,8 @@ do
     h)
       cat <<EOU
 -c cell ID file (barcodes usually; one id per line)
--g genome window file
--i input directory with bed coverage files
--I file with file locations inside, one file per line, full path name
+-w window file
+-i file with file locations inside, one file per line, full path name
 -F force first time-consuming step even if result file is present
 -n number of sites to consider (default $num_sites)
 EOU
@@ -63,9 +58,8 @@ EOU
    esac
 done
 
-# if [[ -z $inputdir || -z $genomefile ]]; then
-if [[ -z $filelist || -z $genomefile ]]; then
-   echo "Need -I filelistfile and -g genomefile! (see -h)"
+if [[ -z $filelist || -z $windowfile= ]]; then
+   echo "Need -i filelistfile and -w windowfile=! (see -h)"
    false
 fi
 
@@ -74,7 +68,8 @@ if [[ -z $fTAG ]]; then
 fi
 export fTAG
 
-perl -ane 'local $"="_"; $i=$.-1; print "$i\t@F[0..2]\n"' $genomefile > win.tab
+cellatac_region_maketab.sh $windowfile win.tab
+# perl -ane 'local $"="_"; $i=$.-1; print "$i\t@F[0..2]\n"' $windowfile > win.tab
 
 # (cd $inputdir && ls -1 *.w5k.txt) | cut -f 1 -d '.' | nl -v0 -nln -w1 > cell.tab
 nl -v0 -nln -w1 < $cellnames > cell.tab
@@ -147,16 +142,19 @@ export MCLXIOVERBOSITY=2
 # # #############################
  #  Output to matrixmarket format
 #   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  n_regions=$(cat win$fTAG.names | wc -l)
-  n_cells=$(cat cells.txt | wc -l)
+#  n_regions=$(cat win$fTAG.names | wc -l)
+#  n_cells=$(cat cells.txt | wc -l)
+
   n_entries=$(perl -ane '$S+=$F[1]; END{print "$S\n";}' win$fTAG.stats)
 
->&2 echo "Writing matrix market file"
-(
-cat <<EOH
-%%MatrixMarket matrix coordinate pattern general
-$n_regions $n_cells $n_entries
-EOH
-mcxdump -imx win2cell$fTAG.reindexed --no-values | perl -ane 'print $F[0]+1, "\t", $F[1]+1, "\n";'
-) | gzip > mtx.gz
+#>&2 echo "Writing matrix market file"
+#(
+#cat <<EOH
+#%%MatrixMarket matrix coordinate pattern general
+#$n_regions $n_cells $n_entries
+#EOH
+#mcxdump -imx win2cell$fTAG.reindexed --no-values | perl -ane 'print $F[0]+1, "\t", $F[1]+1, "\n";'
+#) | gzip > mtx.gz
+
+cellatac_make_mmtx.sh -r win20000.names -c cells.txt -m win2cell$fTAG.reindexed -e $n_entries -t pattern -o mtx.gz
 

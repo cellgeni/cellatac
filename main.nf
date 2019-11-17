@@ -73,9 +73,11 @@ params.cellfile      =  null
 params.cellbatchsize = 100            // some things parallelise over cells, but per-cell is overkill.
 
 params.nclades       =  10
-params.ntfs          =  2E4
+params.ntfs          =  20000
 params.npcs          =  20
 params.windowsize    =  5000
+
+NWIN = params.ntfs
 
 
 if (!params.psbam || !params.psbed || !params.cellfile || !params.cellbamdir) {
@@ -235,13 +237,13 @@ process clusters_define_cusanovich2018_P3_B {
   output:
   file('cus_P3_clades.tsv') into ch_P4_clades
   file('*.pdf')
-                      // fixme hardcoded 20000
+
   shell:          
   '''
   mkdir matrix
   cd matrix
-  #cellatac_top_region.sh -g ../genome_w5kbed -i ../cellcoverage/ -n 20000
-  cellatac_top_region.sh -c ../cellnames.txt -g ../genome_w5kbed -I ../cov.inputs -n cellnames.txt -n 20000
+  cellatac_top_region.sh -c ../cellnames.txt -w ../genome_w5kbed -i ../cov.inputs -n !{NWIN}
+  # fixme: define outputs of ^ script using options. Currently implicit.
   cd ..
 
   ln -s !{baseDir}/bin/cusanovich2018_lib.r .
@@ -249,7 +251,7 @@ process clusters_define_cusanovich2018_P3_B {
   --nclades=!{params.nclades}         \\
   --npcs=!{params.npcs}               \\
   --matrix=matrix/mtx.gz              \\
-  --regions=matrix/regions20000.txt   \\
+  --regions=matrix/regions!{NWIN}.txt \\
   --cells=matrix/cells.txt            \\
   < !{baseDir}/bin/cluster2_cells_cusanovich2018.R
   '''
@@ -368,7 +370,7 @@ process peaks_masterlist {
 
   output:
   file('allclusters_peaks_sorted.bed')
-  file('allclusters_masterlist_sps.bed') into ch_masterbed_sps
+  file('allclusters_masterlist_sps.bed') into (ch_masterbed_sps, ch_masterbed_sps2)
 
     // NOTE may want to encode some cluster parameters in the file name? Also preceding processes
   shell:
@@ -396,7 +398,7 @@ process masterlist_cells_count {
   file(cellbam_list) from ch_cellbams_peaks2
 
   output:
-  file('*.mp.txt')
+  file('*.mp.txt') into ch_cellpeak
 
   shell:
   '''
@@ -408,6 +410,38 @@ process masterlist_cells_count {
   done < !{cellbam_list}
   '''
 }
+
+
+
+// hierverder: most of the work tobe done in cellatac_peak_matrix.sh
+
+process make_peakmatrix {
+
+  tag "peak-cell-matrix"
+
+  publishDir "${params.outdir}/peak_matrix"
+
+  input:
+  file metafile from ch_cellpeak.flatMap { ls -> ls.collect{ it.toString() } }.collectFile(name: 'peak.inputs', newLine: true)
+  file('masterpeak.bed') from ch_masterbed_sps2.collect()
+  file('cellnames.txt') from thecellfile
+
+  output:
+  file('cell2peak.gz')
+  file('peaks.txt')
+  file('cells.txt')
+
+  script:
+  '''
+  cellatac_peak_matrix.sh -c cellnames.txt -w masterpeak.bed -i peak.inputs
+  '''
+}
+
+
+
+// 2. a process peakmatrix
+//    b cellatac_peak_matrix.sh
+
 
 
 

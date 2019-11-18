@@ -25,10 +25,11 @@
 
 /* NOTES/TODO/QUESTIONS
 
-   - make samdemux.nf for demultiplexing, converting to bed, and creating fai
+   - cellatac scripts have implicit naming convention. fix.
+   - chrEBV hardcoded
+   - encode sample name in R script output.
 
-   - We now pass in the possorted bed file.
-     For the psbed and psbam files, do we need to subset only those reads that belong to is__cell_barcode cells?
+   - make samdemux.nf for demultiplexing, and creating bai if it does not exist.
 
    ! these look nearly identical (check prepare step):
      *  possorted_bam.genome.txt
@@ -38,22 +39,16 @@
 
      In the P6 scripts these seem to be made again, same as in P2 script.
 
-   - the pipeline chunks cells into batches in a few places, using meta files
-     of bam locations.
-     The cluster R script stages all w5k.txt files in single directory;
-     this can be changed to a meta file (constructed with collectFile).
-     Need to change the R script input reading.
-
-   - encode sample name in R script output.
-
    # Note: singularity used for R clustering process and for macs2.
 
    ? input tag to encode parameters, use in output dir? User could this outside pl.
-   - chrEBV hardcoded
    ? improve inclusion of bin/cusanovich2018_lib.r (currently linked in)
    - more arguments for parameters?
    - make sure parameters and pipeline caching/resumption play as they should.
    - use caching for f_psbam outside NF perhaps, time consuming. StoreDir?
+
+   - For psbam, do we need to subset only those reads that belong to is__cell_barcode cells?
+     (this is probably no longer relevant, check).
 */
 
 
@@ -264,8 +259,8 @@ process clusters_define_cusanovich2018_P3 {
   file('genome_w5kbed') from ch_genomebed_P3
   file('cellcoverage/*') from ch_cellcoverage_P3.flatMap().collect()
 
-        // NOTE / TODO. we could generate a meta file and pass this to the R script.
-
+//  This script is now a dead-end; we retain it for now to make sure new approach does
+//  the same.
 //  output:
 //  file('cus_P3_clades.tsv') into ch_P4_clades
 //  file('*.pdf')
@@ -409,8 +404,6 @@ process masterlist_cells_count {
 
 
 
-// hierverder: most of the work tobe done in cellatac_peak_matrix.sh
-
 process make_peakmatrix {
 
   tag "peak-cell-matrix"
@@ -432,12 +425,6 @@ process make_peakmatrix {
   cellatac_peak_matrix.sh -c cellnames.txt -w masterpeak.bed -i peak.inputs
   '''
 }
-
-
-
-// 2. a process peakmatrix
-//    b cellatac_peak_matrix.sh
-
 
 
 

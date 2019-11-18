@@ -19,7 +19,6 @@
    full path name to  |   is argument to option
 ----------------------+--------------------------------------
    sample_pb.bam      |   --psbam
-   sample_pb.bed      |   --psbed
    barcode100.txt     |   --cellfile
    d100               |   --cellbamdir
 */
@@ -27,8 +26,6 @@
 /* NOTES/TODO/QUESTIONS
 
    - make samdemux.nf for demultiplexing, converting to bed, and creating fai
-
-   - do we need f_psbed? it is to reduce #windows, but perhaps not needed. See todo near it.
 
    - We now pass in the possorted bed file.
      For the psbed and psbam files, do we need to subset only those reads that belong to is__cell_barcode cells?
@@ -65,7 +62,6 @@ params.genome        =  'hg38'
 params.outdir        =  'results'
 params.cellbamdir    =   null
 params.psbam         =   null
-params.psbed         =   null
 params.psbai         =   null
 params.sampleid      =  'thesamp'
 params.cellfile      =  null
@@ -80,8 +76,8 @@ params.windowsize    =  5000
 NWIN = params.ntfs
 
 
-if (!params.psbam || !params.psbed || !params.cellfile || !params.cellbamdir) {
-  exit 1, "Please supply --psbam --psbed --cellfile --cellbamdir each with argument"
+if (!params.psbam || !params.cellfile || !params.cellbamdir) {
+  exit 1, "Please supply --psbam --cellfile --cellbamdir each with argument"
 }
 
 // Channel.fromPath(params.cellfile).until { false}.set { ch_get_cells }
@@ -114,7 +110,7 @@ process posbam_prepare_info {
   publishDir "$params.outdir/sample"
 
   input:
-  set val(gntag), val(sample), file(f_psbam), file(f_psbed), file(f_psbai) from Channel.from([[params.genome, params.sampleid, file(params.psbam), file(params.psbed), file(params.psbai)]])
+  set val(gntag), val(sample), file(f_psbam), file(f_psbai) from Channel.from([[params.genome, params.sampleid, file(params.psbam), file(params.psbai)]])
   file(gw5k) from ch_genome_w5k
 
   output:
@@ -143,7 +139,7 @@ process posbam_prepare_info {
   # TODO do we gain much from this? (measure how quick it is and how many windows we lose).
   # Now doing this. Original code first:
   # 1b.2
-  # bedtools intersect -a !{gw5k} -b !{f_psbed} -wa | uniq > !{sample}.w5k.bed
+  # bedtools intersect -a !gw5k -b !f_psbed -wa | uniq > !sample.w5k.bed
   # ^^^^^^^^^^^^^^^^^^^^^^ original code, seems to take a long time.
   # See below for new code.
   # The old code led to a small reduction in number of windows (<10%).

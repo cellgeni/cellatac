@@ -1,4 +1,7 @@
 
+
+- potentially streaming etc format is a little bit faster.
+
 - explicit outputs in matrixmarket creation
 
 - document suffix dependencies (w5k.txt and mp.txt)

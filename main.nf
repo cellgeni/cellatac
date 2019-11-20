@@ -1,7 +1,7 @@
 
 
-/* Sanger Cellular Genetics ATAC-seq pipeline.
- * Scripts developed by Luz Garcia Alonso
+/* Sanger Cellular Genetics single cell ATAC-seq pipeline.
+ * Scripts developed by Luz Garcia Alonso.
  * The first version impmlements the clustering approach from the Cusanovich 2018 manuscript.
  * Nextflow integration by Stijn van Dongen.
 */
@@ -37,11 +37,9 @@
           there is also the file
      *  hg38.chrom.size in assets; check how it's used, especially relative to sorting requirement.
 
-     In the P6 scripts these seem to be made again, same as in P2 script.
-
    # Note: singularity used for R clustering process and for macs2.
 
-   ? input tag to encode parameters, use in output dir? User could this outside pl.
+   ? input tag to encode parameters, use in output dir? User could do this outside pl.
    ? improve inclusion of bin/cusanovich2018_lib.r (currently linked in)
    - more arguments for parameters?
    - make sure parameters and pipeline caching/resumption play as they should.
@@ -376,7 +374,7 @@ process peaks_masterlist {
 }
 
 
-process masterlist_cells_count {
+process cells_masterlist_coverage {
 
   tag "${cellbam_list}"
 

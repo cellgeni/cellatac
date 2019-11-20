@@ -1,7 +1,6 @@
 #!/bin/bash
 
-# perl -ane 'local $"="_"; $i=$.-1; print "$i\t@F[0..2]\n"' $genomefile > win.tab
-#     perl -ane 'local $"="_"; print "$ENV{b}\t@F[0..2]\t$F[3]\n"' $f
+# convert a matrix in mcl/mcx format to matrixmarket format. See -h for more information.
 
 set -euo pipefail
 

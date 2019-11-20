@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # This script reads many bedtools coverage output files and combines them in a
-# matrix in mcl native binary format. This format very fast for reading,
+# matrix in mcl native binary format. This format is very fast for reading,
 # writing and subsetting.  The most frequent windows are picked and a subsetted
 # matrix in matrixmarket format is generated.
 
@@ -9,9 +9,7 @@
 # make sure all barcodes have at least 1 window > 0.
 # mcxdump is not guaranteed to output integers (for larger numbers) due to %g format (e.g. 9.84373e+06)
 # -> not relevant really, as currently approach normalises everything to 1.
-# file existence test currently presents can cause resumption to fail if corrupted (remove or add force)
-# -> added mcx query test, but still not sufficient.
-# barcode index creation depends on '.' field separation in file name.
+# file existence test currently present can cause resumption to fail if corrupted (remove or add force)
 
 set -euo pipefail
 
@@ -142,19 +140,9 @@ export MCLXIOVERBOSITY=2
 # # #############################
  #  Output to matrixmarket format
 #   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-#  n_regions=$(cat win$fTAG.names | wc -l)
-#  n_cells=$(cat cells.txt | wc -l)
 
+>&2 echo "Producing matrixmarket format"
   n_entries=$(perl -ane '$S+=$F[1]; END{print "$S\n";}' win$fTAG.stats)
 
-#>&2 echo "Writing matrix market file"
-#(
-#cat <<EOH
-#%%MatrixMarket matrix coordinate pattern general
-#$n_regions $n_cells $n_entries
-#EOH
-#mcxdump -imx win2cell$fTAG.reindexed --no-values | perl -ane 'print $F[0]+1, "\t", $F[1]+1, "\n";'
-#) | gzip > mtx.gz
-
-cellatac_make_mmtx.sh -r win20000.names -c cells.txt -m win2cell$fTAG.reindexed -e $n_entries -t pattern -o mtx.gz
+  cellatac_make_mmtx.sh -r win$fTAG.names -c cells.txt -m win2cell$fTAG.reindexed -e $n_entries -t pattern -o mtx.gz
 

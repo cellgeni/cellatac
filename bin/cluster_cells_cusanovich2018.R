@@ -119,6 +119,8 @@ n_sites_per_cell = colSums(f_binary_mat)
 f_binary_mat = f_binary_mat[rowSums(f_binary_mat) > 0, ]
 
 writeMM(f_binary_mat, "check.mtx")
+writeLines(rownames(f_binary_mat), "rownames.txt")
+writeLines(colnames(f_binary_mat), "colnames.txt")
   message('foo')
   #print(colSums(f_binary_mat))
   #print(rowSums(f_binary_mat))

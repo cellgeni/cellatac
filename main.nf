@@ -231,7 +231,7 @@ process clusters_define_cusanovich2018_P3_B {
   '''
   mkdir matrix
   cd matrix
-  cellatac_top_region.sh -c ../cellnames.txt -w ../genome_w5kbed -i ../cov.inputs -n !{NWIN}
+  ca_top_region.sh -c ../cellnames.txt -w ../genome_w5kbed -i ../cov.inputs -n !{NWIN}
   # fixme: define outputs of ^ script using options. Currently implicit.
   cd ..
 
@@ -420,7 +420,7 @@ process make_peakmatrix {
 
   script:
   '''
-  cellatac_peak_matrix.sh -c cellnames.txt -w masterpeak.bed -i peak.inputs
+  ca_peak_matrix.sh -c cellnames.txt -w masterpeak.bed -i peak.inputs
   '''
 }
 

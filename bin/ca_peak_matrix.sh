@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # This script reads many bedtools coverage peak output files and outputs
-# them in matrixmarket format. See cellatac_top_regions.sh for more comments.
+# them in matrixmarket format. See ca_top_regions.sh for more comments.
 
 set -euo pipefail
 
@@ -47,7 +47,7 @@ if [[ -z $filelist || -z $windowfile ]]; then
 fi
 
 
-cellatac_region_maketab.sh $windowfile win.tab
+ca_region_maketab.sh $windowfile win.tab
 
 nl -v0 -nln -w1 < $cellnames > cell.tab
 
@@ -84,6 +84,6 @@ n_entries=$(tail -n +2 peak2cell.stats | perl -ane '$S+=$F[1]; END{print "$S\n";
  #  Output to matrixmarket format
 #   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-cellatac_make_mmtx.sh -r peaks.txt -c cells.txt -m peak2cell.mcx -e $n_entries -t integer -o cell2peak.gz
+ca_make_mmtx.sh -r peaks.txt -c cells.txt -m peak2cell.mcx -e $n_entries -t integer -o cell2peak.gz
 
 

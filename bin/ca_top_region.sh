@@ -66,7 +66,7 @@ if [[ -z $fTAG ]]; then
 fi
 export fTAG
 
-cellatac_region_maketab.sh $windowfile win.tab
+ca_region_maketab.sh $windowfile win.tab
 # perl -ane 'local $"="_"; $i=$.-1; print "$i\t@F[0..2]\n"' $windowfile > win.tab
 
 # (cd $inputdir && ls -1 *.w5k.txt) | cut -f 1 -d '.' | nl -v0 -nln -w1 > cell.tab
@@ -144,5 +144,5 @@ export MCLXIOVERBOSITY=2
 >&2 echo "Producing matrixmarket format"
   n_entries=$(perl -ane '$S+=$F[1]; END{print "$S\n";}' win$fTAG.stats)
 
-  cellatac_make_mmtx.sh -r win$fTAG.names -c cells.txt -m win2cell$fTAG.reindexed -e $n_entries -t pattern -o mtx.gz
+  ca_make_mmtx.sh -r win$fTAG.names -c cells.txt -m win2cell$fTAG.reindexed -e $n_entries -t pattern -o mtx.gz
 

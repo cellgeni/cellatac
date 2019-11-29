@@ -418,7 +418,7 @@ process make_peakmatrix {
   file('peaks.txt')
   file('cells.txt')
 
-  script:
+  shell:
   '''
   ca_peak_matrix.sh -c cellnames.txt -w masterpeak.bed -i peak.inputs
   '''

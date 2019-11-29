@@ -32,6 +32,9 @@ my $barcodefile = "";
 my $od = "demux-out";
 my $ntest = 0;
 my $bucket = 0;
+my $do_fragments = 0;
+my $do_psb       = 1;
+my $n_no_psb_match = 0;
 
 
 sub help {
@@ -44,6 +47,7 @@ Options:
 --dir=<DIR>             directory
 --ntest=<NUM>           test on NUM reads (e.g. 1000000)
 --bucket                distribute the files across directory buckets
+--fragments             demux the 10x ATAC fragments file rather than the possorted bam file
 EOH
 }
 
@@ -55,6 +59,7 @@ if
    ,  "barcodefile=s"   =>   \$barcodefile
    ,  "outdir=s"        =>   \$od
    ,  "bucket"          =>   \$bucket
+   ,  "fragments"       =>   \$do_fragments
    )
 )
    {  print STDERR "option processing failed\n";
@@ -66,6 +71,8 @@ if (!$n_args || $help) {
    help();
    exit(0);
 }
+$do_psb = 0 if $do_fragments;       # It's kind of useful to have access to both positive statements.
+                                    # There is a lot of shared code, and some special code.
 
 
 sub tag_barcode {
@@ -96,6 +103,7 @@ sub flush_lines {
 
 open(BARCODES, '<', $barcodefile) || die "Cannot open barcode file $barcodefile";
 
+my $SUFFIX = $do_psb ? 'sam' : 'bed';
 
 while (<BARCODES>) {
   chomp;
@@ -105,7 +113,7 @@ while (<BARCODES>) {
   my $tag = tag_barcode($bc);
   my $dir = $bucket ? "$od/$tag" : $od;
   -e $dir || mkdir("$dir") || die "Could not make directory $dir";
-  my $bucket = "$dir/$bc.sam";
+  my $bucket = "$dir/$bc.$SUFFIX";
 
   die "File already opened for barcode $bc" if defined($files{$bc});
 
@@ -121,10 +129,11 @@ close BARCODES;
 
 while (<>) {
                          # write headers to each barcode file.
-  if(/^@/){
+  if($do_psb && /^@/){
     foreach my $fh (values %files) {
       print {$fh} $_;
     }
+    next;
   }
                          # Get barcode, write this line to the barcode bucket.
                          # CB:Z cell identifier (Z indicates string type).
@@ -134,35 +143,47 @@ while (<>) {
                          # CB Cell barcode that is error-corrected and
                          #    confirmed against a list of known-good barcode sequences 
 
-  elsif (m{\tCB:Z:(\S+)\b}) {
+  my ($bc);
 
-    my $bc = $1;
-    my $cache = $cache{$bc} || next;        # ignore filtered barcodes.
-    $N_READ++;
-
-    push @$cache, $_;
-
-    if (++$count{$bc} >= $SIZE) {
-      flush_lines($bc, $count{$bc});
-    }
-
-    if ($N_READ % 10000 == 0) {             # 100 dots per line, each dot 10,000 reads.
-      print STDERR '.';
-    }
-    if ($N_READ % 1000000 == 0) {           # 1M reads per line.
-      printf STDERR " %3d\n", $N_READ / 1000000;
-    }
-
-    last if $ntest && $N_READ >= $ntest;
+  if ($do_psb && m{\tCB:Z:(\S+)\b}) {
+    $bc = $1;
   }
+  elsif ($do_fragments) {
+    my @F = split("\t");
+    die "Field count error on line [$_]" unless @F == 5;
+    $bc = $F[3];
+  }
+  else {
+    $n_no_psb_match++;
+    next;
+  }
+
+  my $cache = $cache{$bc} || next;           # ignore filtered barcodes.
+  $N_READ++;
+
+  push @$cache, $_;
+
+  if (++$count{$bc} >= $SIZE) {
+    flush_lines($bc, $count{$bc});
+  }
+
+  if ($N_READ % 10000 == 0) {             # 100 dots per line, each dot 10,000 reads.
+    print STDERR '.';
+  }
+  if ($N_READ % 1000000 == 0) {           # 1M reads per line.
+    printf STDERR " %3d\n", $N_READ / 1000000;
+  }
+
+  last if $ntest && $N_READ >= $ntest;
 }
 
                        # Wrap-up. Flush buffers and close barcode files.
 for my $bc (sort keys %cache) {
   flush_lines($bc, $count{$bc});
-  warn "Issue closing sam file for $bc [$!]" if ! close($files{$bc});
+  warn "Issue closing $SUFFIX file for $bc [$!]" if ! close($files{$bc});
 }
-warn "closed SAMs\n";
+warn "closed $SUFFIX files\n";
+warn "skipped $n_no_psb_match\n" if $do_psb && $n_no_psb_match;
 warn "Read $N_READ wrote $N_WRITTEN\n";
 warn "Regrettably these numbers are not the same\n" if $N_READ != $N_WRITTEN;
 

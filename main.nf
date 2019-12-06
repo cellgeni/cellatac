@@ -6,30 +6,20 @@
  * Nextflow integration by Stijn van Dongen.
 */
 
-/* Example input creation (barcode file creation omitted):
-   samtools index atac_v1_pbmc_10k_possorted_bam
-   samtools view -s 0.05 atac_v1_pbmc_10k_possorted_bam.bam > sample_pb.bam
-   samtools view -h -o - sample_pb.bam | samdemux.pl --barcodefile=barcode100.txt --outdir=d100
-   bedtools bamtobed -i sample_pb.bam  | cut -f 1-3 | uniq > sample_pb.bed
-   cd d100
-   parallel -j 8 sam2bam.sh ::: *-1.sam
-   rm -f *.sam
-
-     Then:
-   full path name to  |   is argument to option
-----------------------+--------------------------------------
-   sample_pb.bam      |   --psbam
-   barcode100.txt     |   --cellfile
-   d100               |   --cellbamdir
-*/
-
 /* NOTES/TODO/QUESTIONS
+
+   ! cellnames duplicates first column of cellpaths. simplify.
+
+   ! sort -k 1,1V assumes 'V' (human alphanumeric) is the input sort order (bam/fragment chromosome order);
+     so it is assume that the fragment file and resulting per-cell fragment files are in that order,
+     but we don't know for sure. It is not an unreasonable assumption and bedtools will probably
+     complain if there is a mismatch somewhere.
+
+     We use this assumpion when merging bed files to get a per-cluster bed file to feed to macs2.
 
    - cellatac scripts have implicit naming convention. fix.
    - chrEBV hardcoded
    - encode sample name in R script output.
-
-   - make samdemux.nf for demultiplexing, and creating bai if it does not exist.
 
    ! these look nearly identical (check prepare step):
      *  possorted_bam.genome.txt
@@ -44,20 +34,18 @@
    - more arguments for parameters?
    - make sure parameters and pipeline caching/resumption play as they should.
    - use caching for f_psbam outside NF perhaps, time consuming. StoreDir?
-
-   - For psbam, do we need to subset only those reads that belong to is__cell_barcode cells?
-     (this is probably no longer relevant, check).
 */
 
 
 params.chromsizes    =  "$baseDir/assets/hg38.chrom.size"
 params.genome        =  'hg38'
 params.outdir        =  'results'
-params.cellbamdir    =   null
+
 params.psbam         =   null
 params.psbai         =   null
 params.sampleid      =  'thesamp'
 params.cellfile      =  null
+params.cellnames     =  null
 
 params.cellbatchsize = 100            // some things parallelise over cells, but per-cell is overkill.
 
@@ -66,15 +54,21 @@ params.ntfs          =  20000
 params.npcs          =  20
 params.windowsize    =  5000
 
+params.fragments     = true          // aim to support both bam and bed/fragment input. Need to about it in
+                                     // places. The cell file has format
+                                     // <barcode|tag>  <path/to/file/that/is/bam/or/bed/demultiplexed/component>
+
 NWIN = params.ntfs
 
 
-if (!params.psbam || !params.cellfile || !params.cellbamdir) {
-  exit 1, "Please supply --psbam --cellfile --cellbamdir each with argument"
+if (!params.psbam || !params.cellfile) {
+  exit 1, "Please supply --psbam --cellfile each with argument"
 }
 
 // Channel.fromPath(params.cellfile).until { false}.set { ch_get_cells }
-thecellfile = file(params.cellfile)
+
+thecellnames = file(params.cellnames)
+thecellfile  = file(params.cellfile)
 
 
 process genome_make_windows {
@@ -155,58 +149,58 @@ process posbam_prepare_info {
   '''
 }
 
-process cells_get_files {
+// process cells_get_files {
+// 
+//     tag "${file_cellnames}"
+// 
+//     errorStrategy 'terminate'
+// 
+//     input:
+//         file file_cellnames from thecellnames
+//     output:
+//         file 'themetafile' into ch_cellbams_chunk, ch_clusbams2
+// 
+//     shell:
+//     '''
+//     while read cellname; do
+//       bam="!{params.cellbamdir}/$cellname.bam"
+//       if [[ ! -e $bam ]]; then
+//         >&2 echo "Bam file $bam not found"
+//         # false
+//       else
+//         echo -e "$cellname\t$bam"
+//       fi
+//     done < !{file_cellnames} > themetafile
+//     '''
+// }
 
-    tag "${file_cellnames}"
-
-    errorStrategy 'terminate'
-
-    input:
-        file file_cellnames from thecellfile
-    output:
-        file 'themetafile' into ch_cellbams_chunk, ch_clusbams2
-
-    shell:
-    '''
-    while read cellname; do
-      bam="!{params.cellbamdir}/$cellname.bam"
-      if [[ ! -e $bam ]]; then
-        >&2 echo "Bam file $bam not found"
-        # false
-      else
-        echo -e "$cellname\t$bam"
-      fi
-    done < !{file_cellnames} > themetafile
-    '''
-}
-
-ch_cellbams_chunk
+Channel.fromPath(params.cellfile)
    .splitText(by: params.cellbatchsize, file: "celllist.")
-   .into{ch_cellbams_coverage2; ch_cellbams_peaks2}
+      .into{ch_celldefs_coverage2; ch_celldefs_peaks2}
 
 
 process cells_window_coverage_P2 {         /* P2 process cusanovich2018.P2.windowcount.sh */
 
-  tag "${cellbam_list}"
+  tag "${celldef_list}"
 
   publishDir "$params.outdir/cells"
 
   input:
       file sample_w5ksorted from ch_sample_w5ksorted.collect()
       file sample_chrlen    from ch_chrom_length.collect()
-      file cellbam_list from ch_cellbams_coverage2
+      file celldef_list from ch_celldefs_coverage2
 
   output:
     file('*.txt') into (ch_cellcoverage_P3, ch_cellcoverage_P3_B)
 
   shell:
   '''
-  while read cellname cellbam; do
+  while read cellname celldef; do
     bedtools coverage -sorted -header \\
       -a !{sample_w5ksorted}      \\
-      -b $cellbam                 \\
+      -b $celldef                 \\
       -g !{sample_chrlen} | awk -F"\\t" '{if($4>0) print $0}' > $cellname.w5k.txt
-  done < !{cellbam_list}
+  done < !{celldef_list}
   '''
 }
 
@@ -219,7 +213,7 @@ process clusters_define_cusanovich2018_P3_B {
 
   input:
   file('genome_w5kbed') from ch_genomebed_P3_B
-  file('cellnames.txt') from thecellfile
+  file('cellnames.txt') from thecellnames
   file metafile from ch_cellcoverage_P3_B.flatMap { ls -> ls.collect{ it.toString() } }.collectFile(name: 'cov.inputs', newLine: true)
   // file('cellcoverage/*') from ch_cellcoverage_P3_B.flatMap().collect()
 
@@ -282,7 +276,7 @@ process clusters_index_P4 {
             // fixme using old idiom for channels, but now have a list. as a hack I flatmap it.
             // so that I can then use collectFile.
   input:
-  file metafile from ch_clusbams2
+  file metafile from thecellfile
   file cladefile from ch_P4_clades
 
   output:
@@ -304,18 +298,28 @@ process clusters_makebam_P4 {
   tag "${clustag}"
 
   /* TODO: insert clade,pcs,ntfs in output directory name? */
-  publishDir "${params.outdir}/clusbam"
+  publishDir "${params.outdir}/clusdef"
 
   input:
   set val(clustag), file(clusmetafile) from ch_clusterbam.flatMap().map { [ it.baseName - 'clusinfo.cl', it ] }
 
   output:
-  set val(clustag), file('cluster*bam') into ch_clustermacs
+  set val(clustag), file("cluster.${clustag}.b??") into ch_clustermacs
 
   shell:
-  '''
-  samtools merge "cluster.!{clustag}.bam" -b !{clusmetafile}
-  '''
+  if (params.fragments) {
+                    // sort 1,1V sorts alphanumerically, so chr9 chr10 rather than chr1 chr10.
+                    // There is an assumption here that this is the input sort order.
+    '''
+    cat !{clusmetafile} | tr '\\n' '\\0' > clusmetafile0
+    sort -m -k 1,1V -k 2,2n --files0-from=clusmetafile0 | perl -pe 'chomp;$_.="\\t+\\n";' > cluster.!{clustag}.bed
+    '''
+  }
+  else {
+    '''
+    samtools merge "cluster.!{clustag}.bam" -b !{clusmetafile}
+    '''
+  }
 }
 
 
@@ -326,19 +330,20 @@ process clusters_macs2_P4 {
   publishDir "${params.outdir}/macs2"
 
   input:
-  set val(clustag), file(clusbamfile) from ch_clustermacs
+  set val(clustag), file(clusregionfile) from ch_clustermacs
 
   output:
   set file('*.xls'), file('*.bed')
   file('*.narrowPeak') into ch_combine_clusterpeaks
 
   shell:
+  fmtoption = params.fragments ? "-f AUTO" : "-f BAMPE"
   '''
   # source /nfs/cellgeni/miniconda3/bin/activate py2
 
   outdir=macs2.!{clustag}.out
-  mkdir $outdir
-  macs2 callpeak -t !{clusbamfile} -f BAM -g 2.7e9 -n !{clustag} --outdir . \\
+  mkdir -p $outdir
+  macs2 callpeak -t !{clusregionfile} -g 2.7e9 -n !{clustag} --outdir . !{fmtoption}\\
      --nomodel     \\
      --shift -100  \\
      --extsize 200 \\
@@ -376,7 +381,7 @@ process peaks_masterlist {
 
 process cells_masterlist_coverage {
 
-  tag "${cellbam_list}"
+  tag "${celldef_list}"
 
   publishDir "${params.outdir}/mp_counts"
 
@@ -384,19 +389,19 @@ process cells_masterlist_coverage {
   file(masterbed_sps) from ch_masterbed_sps.collect()
   file sample_chrlen from ch_chrom_length2.collect()
 
-  file(cellbam_list) from ch_cellbams_peaks2
+  file(celldef_list) from ch_celldefs_peaks2
 
   output:
   file('*.mp.txt') into ch_cellpeak
 
   shell:
   '''
-  while read cellname cellbam; do
+  while read cellname celldef; do
     bedtools coverage               \\
     -a !{masterbed_sps}             \\
-    -b $cellbam -sorted -header     \\
+    -b $celldef -sorted -header     \\
     -g !{sample_chrlen} | awk -F"\t" '{if($4>0) print $0}' > $cellname.mp.txt
-  done < !{cellbam_list}
+  done < !{celldef_list}
   '''
 }
 
@@ -411,7 +416,7 @@ process make_peakmatrix {
   input:
   file metafile from ch_cellpeak.flatMap { ls -> ls.collect{ it.toString() } }.collectFile(name: 'peak.inputs', newLine: true)
   file('masterpeak.bed') from ch_masterbed_sps2.collect()
-  file('cellnames.txt') from thecellfile
+  file('cellnames.txt') from thecellnames
 
   output:
   file('cell2peak.gz')

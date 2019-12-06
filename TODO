@@ -1,5 +1,13 @@
 
 
+You typically use the --nomodel option, as the shifting model of MACS does not
+really make sense for open chromation data. As you have probably paired-end
+data, also use the -f BAMPE option. It forces MACS to pileup the real fragment
+length instead of an estimate, which maked sense imho, due to the quiet
+different fragment sizes that the library prep creates, also if you have
+paired-end why not make full use of it"
+
+
 - input becomes
   BARCODE\tPATH
   need to rejig some processes.

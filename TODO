@@ -1,5 +1,13 @@
 
 
+
+- when combining multiple samples, they need to use the same regions.
+Currently regions are derived from samtools view -H on the possorted bam file.
+
+
+
+
+
 You typically use the --nomodel option, as the shifting model of MACS does not
 really make sense for open chromation data. As you have probably paired-end
 data, also use the -f BAMPE option. It forces MACS to pileup the real fragment
@@ -13,6 +21,7 @@ paired-end why not make full use of it"
   need to rejig some processes.
 
 
+- wordmer dependency
 
 - potentially streaming etc format is a little bit faster.
 

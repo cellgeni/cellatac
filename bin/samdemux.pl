@@ -7,6 +7,11 @@
 # directories.  Not sure the latter is really useful, but at least 'ls' may
 # not ruin your terminal on a rainy day.
 
+# This program itself can be multiplexed, as it only reads a set of barcodes
+# specified in the --barcodefile argument.
+
+# A second mode to demultiplex a 10x atac-seq fragments file was added. (--fragments).
+
 
 use strict;
 use warnings;
@@ -35,6 +40,8 @@ my $bucket = 0;
 my $do_fragments = 0;
 my $do_psb       = 1;
 my $n_no_psb_match = 0;
+my $winsize = 5000;
+my $fnedges = undef;
 
 
 sub help {
@@ -48,6 +55,7 @@ Options:
 --ntest=<NUM>           test on NUM reads (e.g. 1000000)
 --bucket                distribute the files across directory buckets
 --fragments             demux the 10x ATAC fragments file rather than the possorted bam file
+--fnedges               output file name for edges (output in --fragments mode)
 EOH
 }
 
@@ -58,8 +66,10 @@ if
    ,  "ntest=i"         =>   \$ntest
    ,  "barcodefile=s"   =>   \$barcodefile
    ,  "outdir=s"        =>   \$od
+   ,  "fnedges=s"       =>   \$fnedges
    ,  "bucket"          =>   \$bucket
    ,  "fragments"       =>   \$do_fragments
+   ,  "winsize=i"       =>   \$winsize
    )
 )
    {  print STDERR "option processing failed\n";
@@ -74,6 +84,11 @@ if (!$n_args || $help) {
 $do_psb = 0 if $do_fragments;       # It's kind of useful to have access to both positive statements.
                                     # There is a lot of shared code, and some special code.
 
+$fnedges = "mtx.$winsize.edges" unless $fnedges;
+
+if ($do_fragments) {
+  open (MTX_ENTRIES, ">$od/$fnedges") || die "cannot open $od/$fnedges for writing";
+}
 
 sub tag_barcode {
   my $bc = shift;
@@ -143,7 +158,7 @@ while (<>) {
                          # CB Cell barcode that is error-corrected and
                          #    confirmed against a list of known-good barcode sequences 
 
-  my ($bc);
+  my ($bc, $region_code);
 
   if ($do_psb && m{\tCB:Z:(\S+)\b}) {
     $bc = $1;
@@ -151,7 +166,12 @@ while (<>) {
   elsif ($do_fragments) {
     my @F = split("\t");
     die "Field count error on line [$_]" unless @F == 5;
-    $bc = $F[3];
+    my ($chr, $start, $end, $mybc, $depth) = @F;
+    my $midpoint = $start + int(($end-$start-1)/2);
+    my $index = $midpoint - ($midpoint % $winsize);
+                        # todo? read tab file to check region code exists.
+    $region_code = $chr . '_' . $index;
+    $bc = $mybc;
   }
   else {
     $n_no_psb_match++;
@@ -162,6 +182,7 @@ while (<>) {
   $N_READ++;
 
   push @$cache, $_;
+  print MTX_ENTRIES "$bc\t$region_code\n" if $do_fragments;
 
   if (++$count{$bc} >= $SIZE) {
     flush_lines($bc, $count{$bc});
@@ -186,6 +207,10 @@ warn "closed $SUFFIX files\n";
 warn "skipped $n_no_psb_match\n" if $do_psb && $n_no_psb_match;
 warn "Read $N_READ wrote $N_WRITTEN\n";
 warn "Regrettably these numbers are not the same\n" if $N_READ != $N_WRITTEN;
+
+
+close MTX_ENTRIES if $do_fragments;
+
 
 exit 0;
 

@@ -10,6 +10,9 @@
 # (1) output 'duplicates' as separate regions.
 # (2) do not output 'duplicates'; they will not contribute to depth either.
 
+# This script is not used in the pipeline (we directly use the fragments file), but
+# it can be used to investigate bam/fragments relationship.
+
 # 10x atac seq fragment processing, quoted from
 # https://support.10xgenomics.com/single-cell-atac/software/pipelines/latest/algorithms/overview#dups
 #

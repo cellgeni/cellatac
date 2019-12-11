@@ -8,7 +8,9 @@
 
 /* NOTES/TODO/QUESTIONS
 
-   ! cellnames duplicates first column of cellpaths. simplify.
+   ! with dev changes, bam mode maybe no longer supported.
+
+   / cellnames duplicates first column of cellpaths. simplify.
 
    ! sort -k 1,1V assumes 'V' (human alphanumeric) is the input sort order (bam/fragment chromosome order);
      so it is assume that the fragment file and resulting per-cell fragment files are in that order,
@@ -33,19 +35,16 @@
    ? improve inclusion of bin/cusanovich2018_lib.r (currently linked in)
    - more arguments for parameters?
    - make sure parameters and pipeline caching/resumption play as they should.
-   - use caching for f_psbam outside NF perhaps, time consuming. StoreDir?
 */
 
 
 params.chromsizes    =  "$baseDir/assets/hg38.chrom.size"
 params.genome        =  'hg38'
 params.outdir        =  'results'
-
-params.psbam         =   null
-params.psbai         =   null
 params.sampleid      =  'thesamp'
-params.cellfile      =  null
-params.cellnames     =  null
+
+params.cellmetadata  =  null
+params.cr            =  null
 
 params.cellbatchsize = 100            // some things parallelise over cells, but per-cell is overkill.
 
@@ -61,14 +60,21 @@ params.fragments     = true          // aim to support both bam and bed/fragment
 NWIN = params.ntfs
 
 
-if (!params.psbam || !params.cellfile) {
-  exit 1, "Please supply --psbam --cellfile each with argument"
+if (!params.cr || !params.cellmetadata) {
+  exit 1, "Please supply --cr --cellmetadata each with argument"
 }
 
 // Channel.fromPath(params.cellfile).until { false}.set { ch_get_cells }
 
-thecellnames = file(params.cellnames)
-thecellfile  = file(params.cellfile)
+                                     // fixme noteme some of this metadata is run-specific,
+                                     // tied to demux parameters; e.g. cell selection potentially.
+                                     // Also, in future need chrlen not derived from sample (but checked with sample)
+
+themetapath  = file(params.cellmetadata)
+thecrdata    = file(params.cr)
+thecellpaths = file("${params.cellmetadata}/cells.paths")
+thecellnames = file("${params.cellmetadata}/cells.names")
+thechromsizes = file("${params.cellmetadata}/sample.chrlen")
 
 
 process genome_make_windows {
@@ -77,28 +83,30 @@ process genome_make_windows {
 
   publishDir "${params.outdir}/genome", method: 'copy'
   input:
-  set val(gntag), file(f_chromsizes) from Channel.from([[params.genome, file(params.chromsizes)]])
+  val(gntag) from params.genome
+  file(f_chromsizes) from thechromsizes
 
   output:
   file '*.bed' into ch_genome_w5k, ch_genomebed_P3, ch_genomebed_P3_B
   
   shell:
   '''
-  cat !{f_chromsizes} <(echo -e "chrEBV\t171823") > t.size
-  bedtools makewindows -g t.size -w !{params.windowsize} >  !{gntag}.w5k.bed
+  bedtools makewindows -g !{f_chromsizes} -w !{params.windowsize} >  !{gntag}.w5k.bed
   '''
 }
 
 
 process posbam_prepare_info {
 
-  tag  "${f_psbam}"
+  tag  "prepare"
 
   publishDir "$params.outdir/sample"
 
   input:
-  set val(gntag), val(sample), file(f_psbam), file(f_psbai) from Channel.from([[params.genome, params.sampleid, file(params.psbam), file(params.psbai)]])
-  file(gw5k) from ch_genome_w5k
+  val gntag   from params.genome
+  val sample  from params.sampleid
+  file crdata from thecrdata
+  file gw5k   from ch_genome_w5k
 
   output:
   file "${sample}.w5ksorted.bed" into ch_sample_w5ksorted
@@ -108,37 +116,14 @@ process posbam_prepare_info {
   shell:
   '''
   # 1a
-  samtools view -H !{f_psbam}   \\
+  samtools view -H !{crdata}/possorted_bam.bam   \\
     | grep '@SQ'$'\t''SN:'    \\
     | perl -ne '/\\bSN:(\\S+)/ && ($name=$1); /\\bLN:(\\d+)/ && ($len=$1); print "$name\\t$len\\n";' \\
     | uniq                    \\
-    > !{sample}.chrlen                                                              #   !{sample}.chrlen
-                                                                                    #   called possorted_bam.chromosomes.txt
-                                                                                    #   in P2 script.
-
-  # nf-NOTES perhaps useful to use a caching mechanism (outside NF), as this is very time-consuming
-  # 1b.1                                                                            #   !{sample}.bed
-  # bedtools bamtobed -i !{f_psbam} \\
-  #   | cut -f 1-3 | uniq > !{sample}.bed
-  # CHANGE: we now assume this has been done beforehand.
-
-  # Intersect genome-wide windows to filter out regions that are not in the read data
-  # TODO do we gain much from this? (measure how quick it is and how many windows we lose).
-  # Now doing this. Original code first:
-  # 1b.2
-  # bedtools intersect -a !gw5k -b !f_psbed -wa | uniq > !sample.w5k.bed
-  # ^^^^^^^^^^^^^^^^^^^^^^ original code, seems to take a long time.
-  # See below for new code.
-  # The old code led to a small reduction in number of windows (<10%).
-  # The new code is much much faster. Empty windows should still be lost at the clustering stage.
-
-  # If we simply copy the source to the destination:
-  # cp !{gw5k} !{sample}.w5k.bed
-  # Then there may be chromosome names in the first not occurring in the latter.
-  # So, let's grep the chromosome names from the idxstats, which we'll compute first.
+    > !{sample}.chrlen
 
   # 1b.3                                                                            #   !{sample}.idxstats
-  samtools idxstats !{f_psbam} | cut -f 1-2 | uniq > !{sample}.idxstats
+  samtools idxstats !{crdata}/possorted_bam.bam | cut -f 1-2 | uniq > !{sample}.idxstats
 
   # 1b.2                                                                            #   !{sample}.idxstats
   grep -Fwf <(cut -f 1 !{sample}.idxstats) !{gw5k} > !{sample}.w5k.bed
@@ -174,7 +159,7 @@ process posbam_prepare_info {
 //     '''
 // }
 
-Channel.fromPath(params.cellfile)
+Channel.from(thecellpaths)
    .splitText(by: params.cellbatchsize, file: "celllist.")
       .into{ch_celldefs_coverage2; ch_celldefs_peaks2}
 
@@ -201,6 +186,43 @@ process cells_window_coverage_P2 {         /* P2 process cusanovich2018.P2.windo
       -b $celldef                 \\
       -g !{sample_chrlen} | awk -F"\\t" '{if($4>0) print $0}' > $cellname.w5k.txt
   done < !{celldef_list}
+  '''
+}
+
+
+process clusters_define_cusanovich2018_P3_C {
+
+  tag "bottleneck"
+
+  publishDir "$params.outdir/qc", pattern: '*.pdf', method: 'link'
+
+  when: true
+
+  input:
+  file('cellmetadata') from themetapath
+
+  output:
+  file('cus_P3C_clades.tsv')
+  file('P3C*.pdf')
+
+  shell:          
+  '''
+  mkdir matrix
+  cd matrix
+  ca_top_region2.sh -c ../cellmetadata/cells.tab -w ../cellmetadata/win.tab -m ../cellmetadata/cell2win.mcx -n !{NWIN}
+  # fixme: define outputs of ^ script using options. Currently implicit.
+  cd ..
+
+  ln -s !{baseDir}/bin/cusanovich2018_lib.r .
+  R --slave --quiet --no-save --args  \\
+  --nclades=!{params.nclades}         \\
+  --npcs=!{params.npcs}               \\
+  --matrix=matrix/mtx.gz              \\
+  --regions=matrix/regions!{NWIN}.txt \\
+  --cells=matrix/cells.txt            \\
+  < !{baseDir}/bin/cluster2_cells_cusanovich2018.R
+  mv cus_P3_clades.tsv cus_P3C_clades.tsv
+  mv P3_identify_clades.pdf P3C_identify_clades.pdf
   '''
 }
 
@@ -276,7 +298,7 @@ process clusters_index_P4 {
             // fixme using old idiom for channels, but now have a list. as a hack I flatmap it.
             // so that I can then use collectFile.
   input:
-  file metafile from thecellfile
+  file metafile from thecellpaths
   file cladefile from ch_P4_clades
 
   output:

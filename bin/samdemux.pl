@@ -142,6 +142,8 @@ print STDERR "Done reading barcodes\n";
 close BARCODES;
 
 
+my @entries = ();
+
 while (<>) {
                          # write headers to each barcode file.
   if($do_psb && /^@/){
@@ -182,7 +184,12 @@ while (<>) {
   $N_READ++;
 
   push @$cache, $_;
-  print MTX_ENTRIES "$bc\t$region_code\n" if $do_fragments;
+  push @entries, "$bc\t$region_code\n" if $do_fragments;
+
+  if (@entries > 500000) {
+    print MTX_ENTRIES @entries;
+    @entries = ();
+  }
 
   if (++$count{$bc} >= $SIZE) {
     flush_lines($bc, $count{$bc});
@@ -199,6 +206,8 @@ while (<>) {
 }
 
                        # Wrap-up. Flush buffers and close barcode files.
+print MTX_ENTRIES @entries if @entries;
+
 for my $bc (sort keys %cache) {
   flush_lines($bc, $count{$bc});
   warn "Issue closing $SUFFIX file for $bc [$!]" if ! close($files{$bc});

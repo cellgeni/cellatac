@@ -59,16 +59,21 @@ pdf('P3_identify_clades.pdf')
 print("Stage 1 and 2 M loading, summary statistics")
 
 f_binary_mat <- readMM(file = fn_matrix)
-regions.names = read.delim(fn_regions, header = FALSE, stringsAsFactors = FALSE)
-cells.names = read.delim(fn_cells, header = FALSE, stringsAsFactors = FALSE)
-colnames(f_binary_mat) = cells.names$V1
-rownames(f_binary_mat) = regions.names$V1
 message('foo')
+regions.names = read.delim(fn_regions, header = FALSE, stringsAsFactors = FALSE)
+message('fol')
+cells.names = read.delim(fn_cells, header = FALSE, stringsAsFactors = FALSE)
+message('fok')
+colnames(f_binary_mat) = cells.names$V1
+message('foi')
+rownames(f_binary_mat) = regions.names$V1
+message('bar')
 #print(colSums(f_binary_mat))
 #print(rowSums(f_binary_mat))
 
 # fixme get rid of hardcoded names win.stats and cell20000.stats
 winstats <- read.table("matrix/win.stats", row.names=1, check.names=F, sep="\t", header=T, as.is=T, quote="", comment.char="")
+message('bar')
 options(repr.plot.width = 8, repr.plot.height = 4)
 par(mfrow = c(1, 2))
 hist(log10(winstats$degree), main = 'No. of Cells Each Site is Observed In', breaks = 50)

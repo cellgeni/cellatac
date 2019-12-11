@@ -1,9 +1,14 @@
 
 
+- include demux in regular pipeline; use indexed region approach.
+  use storedir for cellmetadata?
+
 
 - when combining multiple samples, they need to use the same regions.
 Currently regions are derived from samtools view -H on the possorted bam file.
 
+
+- produce mmtx format in mcxdump internally
 
 
 

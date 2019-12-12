@@ -1,36 +1,21 @@
 
 
+params.fragments     =  null            // CR fragments file.
+params.posbam        =  null            // CR possorted bam file.
+params.ncell         =  0               // Can be set for testing purposes; suggest using a
+                                        // sampled fragment file, e.g.
+// zcat fragments.tsv.gz | perl -ne 'print if $. % 11 == 0;' | gzip > fragments11.tsv.gz
 
-/* The demux part has a few niggling inelegancies. They have to do with multiple processes
-   needing to write cell files to a barcode bucket structure (dirname/[ACGT]^4),
-   and the requirement of needing an index barcode -> filepath for all those cells.
-   publishDir does not really work nicely with this.
-   not sure whether storeDir would work here.
-*/
+params.cellcsv       =  null            // CR singlecell.csv file
+params.cellbatchsize =  500             // for demuxing and for masterpeak coverage
 
-
-///////// demux options
-
-params.fragments     =  null
-params.posbam        =  null
-params.ncell         =  0
-params.cellcsv       =  null
-params.dest          =  "celldata"
-params.cellbatchsize =  2000
-params.winsize       =  5000
-
-
-///////// main options
-
-params.genome        =  'hg38'
 params.outdir        =  'results'
-params.sampleid      =  'thesamp'
+params.sampleid      =  'thesamp'       // Used in some names of output files
 
+params.winsize       =  5000            // bin size for genome
 params.nclades       =  10
 params.ntfs          =  20000
 params.npcs          =  20
-params.windowsize    =  5000
-
 
 
 if (!params.fragments || !params.cellcsv || !params.posbam) {
@@ -52,7 +37,7 @@ process prepare {
   cpus 1
   memory 1.GB
 
-  publishDir "${params.dest}", pattern: 'cellmetadata',   mode: 'copy'
+  publishDir "${params.outdir}", pattern: 'cellmetadata',   mode: 'copy'
 
   input:
   set file(f_cells), file(fragments), file(posbam) from Channel.from([[thecellfile, thefragfile, thebamfile]])
@@ -98,6 +83,12 @@ process prepare {
 }
 
 
+
+/* The demux part does a complicated thing with buckets.
+   This is a remnant from a time when everything was published in a bucket structure first.
+   It will probably be removed.
+*/
+
 process demux {
 
   cpus 1
@@ -126,15 +117,15 @@ process demux {
 
 ch_demuxed
   .flatMap()
-  .map { it -> it.toString() - ~/.*celldata\/[ACGT]{4}\// - ~/\.bed/ + '\t' + it.toString() + '\n' }
+  .map { it -> it.toString() - ~/.*celldata\/[ACGT]{4}\// - ~/\.bed/ + '\t' + it.toString()  }
   .into { ch_cellpaths_cluster; ch_cellpaths_peakcov }
   
 
 process matrix {
-	cpus 1
+  cpus 1
   memory 20.GB
 
-  publishDir "${params.dest}/cellmetadata", mode: 'link'
+  publishDir "${params.outdir}/cellmetadata", mode: 'link'
 
   input:
   file all_edges from ch_matrix.collect()
@@ -308,7 +299,7 @@ process cells_masterlist_coverage {
 
   file(celldef_list) from ch_cellpaths_peakcov
     .collate(params.cellbatchsize)
-    .map { it.join() }
+    .map { it.join('\n') }
 
   output:
   file('*.mp.txt') into ch_cellpeak

@@ -1,63 +1,29 @@
 
+- perhaps get rid of the precious bucket structure.
 
-- peak2cell.stats use tab file.
-- write matrices
-
-
-
-- check 
-  process clusters_makebam_P4
+- check
+  clusters_makebam_P4
   we make bed file for macs2 where all features are on the positive strand.
   Any issue with this?
+  Test whether macs2 picks up depth. Maybe ask even.
 
+- devel
+  when combining multiple samples, they need to use the same regions.
+  Currently regions are derived from samtools view -H on the possorted bam file.
 
-- include demux in regular pipeline; use indexed region approach.
-  use storedir for cellmetadata?
+- devel
+  produce mmtx format in mcxdump internally
 
+- potentially streaming etc format is a wee bit faster. Very low priority.
 
-- when combining multiple samples, they need to use the same regions.
-Currently regions are derived from samtools view -H on the possorted bam file.
+- explicit outputs in matrixmarket creation (generally hardcoded names).
 
-
-- produce mmtx format in mcxdump internally
-
-
-
-
-You typically use the --nomodel option, as the shifting model of MACS does not
-really make sense for open chromation data. As you have probably paired-end
-data, also use the -f BAMPE option. It forces MACS to pileup the real fragment
-length instead of an estimate, which maked sense imho, due to the quiet
-different fragment sizes that the library prep creates, also if you have
-paired-end why not make full use of it"
-
-
-- input becomes
-  BARCODE\tPATH
-  need to rejig some processes.
-
-
-- wordmer dependency
-
-- potentially streaming etc format is a little bit faster.
-
-- explicit outputs in matrixmarket creation
-
-- document suffix dependencies (w5k.txt and mp.txt)
-
-- -c argument to cellatac script; check/select only the files that are there, i.e.
-  cope with drop-outs. currently expects all cells/barcodes to succeed. need to comapre with cov.inputs
-  do we just generate empt rows/columns in that case, or will something actually crash? Engineer test.
-  check more generally in the pipeline that it is permissive this way.
-
-- write samdemux.nf
+- -c argument to cellatac script; check/select only the files that are there,
+  i.e.  cope with drop-outs. currently expects all cells/barcodes to succeed.
+  need to comapre with cov.inputs. do we just generate empt rows/columns in that
+  case, or will something actually crash? Engineer test.  check more generally in
+  the pipeline that it is permissive this way.
 
 - layer docker file?
     need mcl and datamash on top of R image.
-
-# collect coverage files in meta file list with locations rather than linking.
-
-# write matrix in old R script.  compare.
-
-
 

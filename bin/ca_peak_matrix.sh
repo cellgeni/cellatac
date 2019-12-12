@@ -76,7 +76,7 @@ else
 fi
 
 
-mcx query -imx peak2cell.mcx -o peak2cell.stats
+mcx query -imx peak2cell.mcx -o peak2cell.stats -tab win.tab
 n_entries=$(tail -n +2 peak2cell.stats | perl -ane '$S+=$F[1]; END{print "$S\n";}')
 
 

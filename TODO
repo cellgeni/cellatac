@@ -1,5 +1,16 @@
 
 
+- peak2cell.stats use tab file.
+- write matrices
+
+
+
+- check 
+  process clusters_makebam_P4
+  we make bed file for macs2 where all features are on the positive strand.
+  Any issue with this?
+
+
 - include demux in regular pipeline; use indexed region approach.
   use storedir for cellmetadata?
 

@@ -202,7 +202,7 @@ process clusters_define_cusanovich2018_P3_C {
   file('cellmetadata') from themetapath
 
   output:
-  file('cus_P3C_clades.tsv')
+  file('cus_P3C_clades.tsv') into ch_P4_clades
   file('P3C*.pdf')
 
   shell:          
@@ -240,7 +240,7 @@ process clusters_define_cusanovich2018_P3_B {
   // file('cellcoverage/*') from ch_cellcoverage_P3_B.flatMap().collect()
 
   output:
-  file('cus_P3_clades.tsv') into ch_P4_clades
+  file('cus_P3_clades.tsv')
   file('*.pdf')
 
   shell:          

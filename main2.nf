@@ -31,7 +31,6 @@ params.ntfs          =  20000
 params.npcs          =  20
 params.windowsize    =  5000
 
-NWIN = params.ntfs
 
 
 if (!params.fragments || !params.cellcsv || !params.posbam) {
@@ -153,47 +152,35 @@ process matrix {
 }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+//      ^----- split between demux part and analysis part -----_      //
 
 
 process clusters_define_cusanovich2018_P3_C {
 
   tag "bottleneck"
 
-  publishDir "$params.outdir/qc", pattern: '*.pdf', method: 'link'
+  publishDir "$params.outdir/qc", mode: 'link'
 
   when: true
 
   input:
   file('cellmetadata') from ch_metadata
   file('cell2winmtx') from ch_cell2win
-  val nclades from params.nclades
-  val npcs from params.npcs
+  val nclades   from  params.nclades
+  val npcs      from  params.npcs
+  val sampleid  from  params.sampleid
+  val ntfs      from  params.ntfs
 
   output:
-  file('cus_P3C_clades.tsv') into ch_P4_clades
-  file('P3C*.pdf')
+  file('cus.obj.*.clades.tsv') into ch_P4_clades
+  file('cus.qc.*.pdf')
+  file('cus.obj.*')
 
   shell:          
   '''
   mkdir matrix
   cd matrix
-  ca_top_region2.sh -c ../cellmetadata/cells.tab -w ../cellmetadata/win.tab -m ../cell2winmtx -n !{NWIN}
+  ca_top_region2.sh -c ../cellmetadata/cells.tab -w ../cellmetadata/win.tab -m ../cell2winmtx -n !{ntfs}
   # fixme: define outputs of ^ script using options. Currently implicit.
   cd ..
 
@@ -202,11 +189,10 @@ process clusters_define_cusanovich2018_P3_C {
   --nclades=!{nclades}                \\
   --npcs=!{npcs}                      \\
   --matrix=matrix/mtx.gz              \\
-  --regions=matrix/regions!{NWIN}.txt \\
+  --sampleid=!{sampleid}              \\
+  --regions=matrix/regions!{ntfs}.txt \\
   --cells=matrix/cells.txt            \\
   < !{baseDir}/bin/cluster2_cells_cusanovich2018.R
-  mv cus_P3_clades.tsv cus_P3C_clades.tsv
-  mv P3_identify_clades.pdf P3C_identify_clades.pdf
   '''
 }
 
@@ -238,7 +224,7 @@ process clusters_makebam_P4 {
   tag "${clustag}"
 
   /* TODO: insert clade,pcs,ntfs in output directory name? */
-  publishDir "${params.outdir}/clusdef"
+  publishDir "${params.outdir}/clusdef", mode: 'link'
 
   input:
   set val(clustag), file(clusmetafile) from ch_clusterbam.flatMap().map { [ it.baseName - 'clusinfo.cl', it ] }
@@ -258,7 +244,7 @@ process clusters_macs2_P4 {
 
   tag "${clustag}"
 
-  publishDir "${params.outdir}/macs2"
+  publishDir "${params.outdir}/macs2", mode: 'link'
 
   input:
   set val(clustag), file(clusregionfile) from ch_clustermacs
@@ -286,7 +272,7 @@ process peaks_masterlist {
 
   tag "masterlist"
 
-  publishDir "${params.outdir}/peaks"
+  publishDir "${params.outdir}/peaks", mode: 'link'
 
   input:
   file np_files from ch_combine_clusterpeaks.collect()
@@ -313,15 +299,15 @@ process cells_masterlist_coverage {
 
   tag "${celldef_list}"
 
-  publishDir "${params.outdir}/mp_counts"
+  // publishDir "${params.outdir}/mp_counts"
+  // A lot of files. This is simply the raw input for the cell/peak matrix.
 
   input:
   file(masterbed_sps) from ch_masterbed_sps.collect()
   file sample_chrlen from ch_chrom_length2.collect()
-  val batchsize from params.cellbatchsize
 
   file(celldef_list) from ch_cellpaths_peakcov
-    .collate(batchsize)
+    .collate(params.cellbatchsize)
     .map { it.join() }
 
   output:
@@ -344,7 +330,7 @@ process make_peakmatrix {
 
   tag "peak-cell-matrix"
 
-  publishDir "${params.outdir}/peak_matrix"
+  publishDir "${params.outdir}/peak_matrix", mode: 'link'
 
   input:
   file metafile from ch_cellpeak.flatMap { ls -> ls.collect{ it.toString() } }.collectFile(name: 'peak.inputs', newLine: true)

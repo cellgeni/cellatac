@@ -5,7 +5,9 @@
 # Based on http://atlas.gs.washington.edu/fly-atac/docs/
 #
 
+# tf_idf_counts and  SVDumap_vd 
 
+sampleid = "thesample"
 theargs <- R.utils::commandArgs(asValues=TRUE)
 
 N_clades = 10 # Number of expected cell clusters
@@ -20,6 +22,9 @@ if (!is.null(theargs$npcs)) {
 }
 if (!is.null(theargs$nclades)) {
    N_clades <- as.integer(theargs$nclades)
+}
+if (!is.null(theargs$sampleid)) {
+   sampleid <- theargs$sampleid
 }
 
 fn_matrix   <- theargs$matrix
@@ -50,7 +55,7 @@ library(umap)
 library(gplots)
 source('cusanovich2018_lib.r')
 
-pdf('P3_identify_clades.pdf')
+pdf(sprintf("cus.qc.%s.pdf", sampleid))
 
 #### Load window coverage per cell into a matrix
 ## Read genome windows and merge
@@ -59,15 +64,10 @@ pdf('P3_identify_clades.pdf')
 print("Stage 1 and 2 M loading, summary statistics")
 
 f_binary_mat <- readMM(file = fn_matrix)
-message('foo')
 regions.names = read.delim(fn_regions, header = FALSE, stringsAsFactors = FALSE)
-message('fol')
 cells.names = read.delim(fn_cells, header = FALSE, stringsAsFactors = FALSE)
-message('fok')
 colnames(f_binary_mat) = cells.names$V1
-message('foi')
 rownames(f_binary_mat) = regions.names$V1
-message('bar')
 #print(colSums(f_binary_mat))
 #print(rowSums(f_binary_mat))
 
@@ -91,6 +91,10 @@ nfreqs = t(t(f_binary_mat) / Matrix::colSums(f_binary_mat))
 idf = as(log(1 + ncol(f_binary_mat) / Matrix::rowSums(f_binary_mat)), 'sparseVector')
 tf_idf_counts = as(Diagonal(x = as.vector(idf)), 'sparseMatrix') %*% nfreqs
 print(dim(tf_idf_counts))
+writeMM(tf_idf_counts, file=sprintf("cus.obj.%s.tf_idf_counts.txt", sampleid))
+write(rownames(tf_idf_counts), file=sprintf("cus.obj.%s.tf_idf_counts.rn", sampleid))
+write(colnames(tf_idf_counts), file=sprintf("cus.obj.%s.tf_idf_counts.cn", sampleid))
+
 
 # elbow plot
 # p_elbow = elbow_plot(tf_idf_counts, num_pcs = 200, title = 'PCA')
@@ -111,6 +115,7 @@ diag(sk_diag) = SVD$d
 sk_diag[1, 1] = 0
 SVDumap_vd = t(sk_diag %*% t(SVD$v))
 dim(SVDumap_vd)
+write.table(SVDumap_vd, file=sprintf("cus.obj.%s.svdumap_vd.txt", sampleid), sep="\t", quote=FALSE, row.names=TRUE, col.names=TRUE)
 # and truncate the distribution of LSI values at +/-1.5.
 LSI_out = t(t(sk_diag %*% t(SVD$v)) %*% t(SVD$u))
 LSI_out = t(scale(t(LSI_out)))
@@ -134,7 +139,7 @@ cells_tree_cut = cutree(hclust_cells, N_clades)
 lsi_cells = cbind(colnames(f_binary_mat), cells_tree_cut)
 ## Save data
 df_pseudobulk = lsi_cells
-write.table(df_pseudobulk, 'cus_P3_clades.tsv', quote = F, sep = '\t', row.names = F, col.names = F)
+write.table(df_pseudobulk, file=sprintf("cus.obj.%s.clades.tsv", sampleid), quote = F, sep = '\t', row.names = F, col.names = F)
 ## heatmap
 message('Plotting clusters')
 options(repr.plot.width = 4, repr.plot.height = 6)

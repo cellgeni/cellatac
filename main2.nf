@@ -58,6 +58,7 @@ process prepare {
   input:
   set file(f_cells), file(fragments), file(posbam) from Channel.from([[thecellfile, thefragfile, thebamfile]])
   val cellbatchsize from params.cellbatchsize
+  val winsize from params.winsize
 
   output:
   file('cellmetadata/cells.tab')    into ch_celltab
@@ -93,14 +94,7 @@ process prepare {
   split -l !{cellbatchsize} cellmetadata/cells.names c_c.
 
 # Tab file for windows
-  ca_make_chromtab.pl !{params.winsize} cellmetadata/sample.chrlen > cellmetadata/win.tab
-
-# Buckets
-#  dest="!{params.dest}/celldata"
-#  mkdir -p "$dest"                       #  Publish action from within task.
-#  for d in $(wordmer.pl ACGT 4); do      #  fixme wordmer dependency.
-#    mkdir -p "$dest/$d";
-#  done
+  ca_make_chromtab.pl !{winsize} cellmetadata/sample.chrlen > cellmetadata/win.tab
   '''
 }
 
@@ -188,6 +182,8 @@ process clusters_define_cusanovich2018_P3_C {
   input:
   file('cellmetadata') from ch_metadata
   file('cell2winmtx') from ch_cell2win
+  val nclades from params.nclades
+  val npcs from params.npcs
 
   output:
   file('cus_P3C_clades.tsv') into ch_P4_clades
@@ -203,8 +199,8 @@ process clusters_define_cusanovich2018_P3_C {
 
   ln -s !{baseDir}/bin/cusanovich2018_lib.r .
   R --slave --quiet --no-save --args  \\
-  --nclades=!{params.nclades}         \\
-  --npcs=!{params.npcs}               \\
+  --nclades=!{nclades}                \\
+  --npcs=!{npcs}                      \\
   --matrix=matrix/mtx.gz              \\
   --regions=matrix/regions!{NWIN}.txt \\
   --cells=matrix/cells.txt            \\
@@ -322,9 +318,10 @@ process cells_masterlist_coverage {
   input:
   file(masterbed_sps) from ch_masterbed_sps.collect()
   file sample_chrlen from ch_chrom_length2.collect()
+  val batchsize from params.cellbatchsize
 
   file(celldef_list) from ch_cellpaths_peakcov
-    .collate(params.cellbatchsize)
+    .collate(batchsize)
     .map { it.join() }
 
   output:

@@ -171,8 +171,16 @@ process clusters_define_cusanovich2018_P3_C {
   '''
   mkdir matrix
   cd matrix
-  ca_top_region2.sh -c ../cellmetadata/cells.tab -w ../cellmetadata/win.tab -m ../cell2winmtx -n !{ntfs}
-  # fixme: define outputs of ^ script using options. Currently implicit.
+  ca_top_region2.sh \\
+      -c ../cellmetadata/cells.tab    \\
+      -w ../cellmetadata/win.tab      \\
+      -m ../cell2winmtx               \\
+      -n !{ntfs}                      \\
+      -C filtered_cell.stats          \\
+      -W win.stats                    \\
+      -R regions.names                \\
+      -N cells.names
+
   cd ..
 
   ln -s !{baseDir}/bin/cusanovich2018_lib.r .
@@ -180,9 +188,11 @@ process clusters_define_cusanovich2018_P3_C {
   --nclades=!{nclades}                \\
   --npcs=!{npcs}                      \\
   --matrix=matrix/mtx.gz              \\
+  --winstats=matrix/win.stats         \\
+  --cellstats=matrix/filtered_cell.stats  \\
   --sampleid=!{sampleid}              \\
-  --regions=matrix/regions!{ntfs}.txt \\
-  --cells=matrix/cells.txt            \\
+  --regionnames=matrix/regions.names  \\
+  --cellnames=matrix/cells.names      \\
   < !{baseDir}/bin/cluster2_cells_cusanovich2018.R
   '''
 }

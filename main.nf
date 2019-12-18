@@ -171,7 +171,7 @@ process clusters_define_cusanovich2018_P3_C {
   '''
   mkdir matrix
   cd matrix
-  ca_top_region2.sh \\
+  ca_top_region.sh \\
       -c ../cellmetadata/cells.tab    \\
       -w ../cellmetadata/win.tab      \\
       -m ../cell2winmtx               \\
@@ -193,7 +193,7 @@ process clusters_define_cusanovich2018_P3_C {
   --sampleid=!{sampleid}              \\
   --regionnames=matrix/regions.names  \\
   --cellnames=matrix/cells.names      \\
-  < !{baseDir}/bin/cluster2_cells_cusanovich2018.R
+  < !{baseDir}/bin/cluster_cells_cusanovich2018.R
   '''
 }
 

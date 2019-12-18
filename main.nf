@@ -345,7 +345,7 @@ process make_peakmatrix {
 
   shell:
   '''
-  ca_peak_matrix.sh -c cellnames.txt -w masterpeak.bed -i peak.inputs
+  ca_peak_matrix.sh -c cellnames.txt -p masterpeak.bed -i peak.inputs
   '''
 }
 

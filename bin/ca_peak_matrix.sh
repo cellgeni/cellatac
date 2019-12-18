@@ -5,13 +5,13 @@
 
 set -euo pipefail
 
-windowfile=
+peakbedfile=
 filelist=
 cellnames=
 force=false
 
 
-while getopts :c:i:w:Fh opt
+while getopts :c:i:p:Fh opt
 do
     case "$opt" in
     c)
@@ -20,8 +20,8 @@ do
     i)
       filelist=$OPTARG
       ;;
-    w)
-      windowfile=$OPTARG
+    p)
+      peakbedfile=$OPTARG
       ;;
     F)
       force=true
@@ -41,18 +41,18 @@ EOU
    esac
 done
 
-if [[ -z $filelist || -z $windowfile ]]; then
-   echo "Need -i filelistfile and -w window file! (see -h)"
+if [[ -z $filelist || -z $peakbedfile ]]; then
+   echo "Need -i filelistfile and -p peak bed file! (see -h)"
    false
 fi
 
 
-ca_region_maketab.sh $windowfile win.tab
+ca_region_maketab.sh $peakbedfile __peak.tab
 
-nl -v0 -nln -w1 < $cellnames > cell.tab
+nl -v0 -nln -w1 < $cellnames > __cell.tab
 
-cut -f 2 win.tab > peaks.txt
-cut -f 2 cell.tab > cells.txt         # will be identical to $cellnames.
+cut -f 2 __peak.tab > peaks.txt
+cut -f 2 __cell.tab > cells.txt         # will be identical to $cellnames.
 
 
 export MCLXIOFORMAT=8   # force native binary format, it's 20-30 times faster.
@@ -70,13 +70,13 @@ if $force || ! -e peak2cell.mcx; then
     perl -ane 'local $"="_"; print "@F[0..2]\t$ENV{b}\t$F[3]\n"' $f
 
   done < "$filelist" | mcxload \
-          --stream-split -abc - -strict-tabr cell.tab -strict-tabc win.tab --write-binary -o peak2cell.mcx
+          --stream-split -abc - -strict-tabr __cell.tab -strict-tabc __peak.tab --write-binary -o peak2cell.mcx
 else
 >&2 echo "Reusing peak2cell.mcx"
 fi
 
 
-mcx query -imx peak2cell.mcx -o peak2cell.stats -tab win.tab
+mcx query -imx peak2cell.mcx -o peak2cell.stats -tab __peak.tab
 n_entries=$(tail -n +2 peak2cell.stats | perl -ane '$S+=$F[1]; END{print "$S\n";}')
 
 

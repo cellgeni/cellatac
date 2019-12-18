@@ -121,7 +121,7 @@ ch_demuxed
   .into { ch_cellpaths_cluster; ch_cellpaths_peakcov }
   
 
-process matrix {
+process make_big_matrix {
   cpus 1
   memory 20.GB
 
@@ -146,7 +146,7 @@ process matrix {
 //      ^----- split between demux part and analysis part -----_      //
 
 
-process clusters_define_cusanovich2018_P3_C {
+process clusters_define_cusanovich2018 {
 
   tag "bottleneck"
 
@@ -198,7 +198,7 @@ process clusters_define_cusanovich2018_P3_C {
 }
 
 
-process clusters_index_P4 {
+process clusters_index {
 
   tag "${cladefile}"
 
@@ -220,7 +220,7 @@ process clusters_index_P4 {
   // in subsequent processes we can pass this tag on.
 
 
-process clusters_makebam_P4 {
+process clusters_makebam {
 
   tag "${clustag}"
 
@@ -241,7 +241,7 @@ process clusters_makebam_P4 {
 }
 
 
-process clusters_macs2_P4 {
+process clusters_macs2 {
 
   tag "${clustag}"
 

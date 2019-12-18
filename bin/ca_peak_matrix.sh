@@ -67,7 +67,7 @@ if $force || ! -e peak2cell.mcx; then
     g=${f##*/}
     export b=${g%.mp.txt}
 
-    perl -ane 'local $"="_"; print "@F[0..2]\t$ENV{b}\t$F[3]\n"' $f
+    perl -ane 'local $"="_"; print "$F[0]:$F[1]-$F[2]\t$ENV{b}\t$F[3]\n"' $f
 
   done < "$filelist" | mcxload \
           --stream-split -abc - -strict-tabr __cell.tab -strict-tabc __peak.tab --write-binary -o peak2cell.mcx

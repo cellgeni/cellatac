@@ -34,9 +34,6 @@ process prepare {
 
   tag "$cellbatchsize"
 
-  cpus 1
-  memory 1.GB
-
   publishDir "${params.outdir}", pattern: 'cellmetadata',   mode: 'copy'
 
   input:
@@ -91,9 +88,6 @@ process prepare {
 
 process demux {
 
-  cpus 1
-  memory 4.GB
-
   tag "$thetag"
 
   input:
@@ -123,8 +117,6 @@ ch_demuxed
 
 process make_big_matrix {
 
-  cpus 1
-  memory 20.GB
   container 'quay.io/cellgeni/cellclusterer'
 
   publishDir "${params.outdir}/cellmetadata", mode: 'link', pattern: 'cell2win.mcx'
@@ -147,15 +139,16 @@ process make_big_matrix {
 
 
 process mmtx_big_matrix  {
-  cpus 1
-  memory 10.GB
+
+  tag "raw_window_bc_matrix"
+
   container 'quay.io/cellgeni/cellclusterer'
 
-  publishDir "${params.outdir}/matrix", mode: 'link'
+  publishDir "${params.outdir}/win_matrix", mode: 'link'
 
   output:
   file 'raw_window_bc_matrix.mmtx.gz'
-  file '*.txt'
+  file 'raw_*.txt'
 
   input:
   set file('cell2win.mcx'), file('celltab'), file('wintab') from ch_dump_big_matrix
@@ -175,22 +168,20 @@ process mmtx_big_matrix  {
 //      ^----- split between demux part and analysis part -----_      //
 
 
-process load_bed_data {
+process filter_big_matrix {
 
   tag "bed-mcx-mmtx"
 
-  cpus = 2
-  memory = 10.GB
   container = 'quay.io/cellgeni/cellclusterer'
 
-  publishDir "$params.outdir/matrix", mode: 'link', pattern: 'other_publish/filtered*',
+  publishDir "$params.outdir/win_matrix", mode: 'link', pattern: 'other_publish/filtered*',
     saveAs: { fname -> fname - ~/other_publish\// }
 
   when: true
 
   input:
   file('cellmetadata') from ch_metadata
-  file('cell2winmtx') from ch_cell2win
+  file('cell2win.mcx') from ch_cell2win
   val ntfs      from  params.ntfs
 
   output:
@@ -207,7 +198,7 @@ process load_bed_data {
   ca_top_region.sh \\
       -c ../cellmetadata/cells.tab    \\
       -w ../cellmetadata/win.tab      \\
-      -m ../cell2winmtx               \\
+      -m ../cell2win.mcx              \\
       -n !{ntfs}                      \\
       -C ../outputs/filtered_cell.stats          \\
       -W ../outputs/win.stats                    \\
@@ -227,8 +218,6 @@ process do_the_clustering {
 
   tag "cusanovich2018"
 
-  cpus = 2
-  memory = 30.GB
   container = 'quay.io/cellgeni/cellclusterer'
 
   publishDir "$params.outdir/qc", mode: 'link', pattern: 'cus.*'
@@ -287,7 +276,6 @@ process clusters_makebam {
 
   tag "${clustag}"
 
-  /* TODO: insert clade,pcs,ntfs in output directory name? */
   publishDir "${params.outdir}/clusdef", mode: 'link'
 
   input:
@@ -307,6 +295,8 @@ process clusters_makebam {
 process clusters_macs2 {
 
   tag "${clustag}"
+
+  container = 'fooliu/macs2'
 
   publishDir "${params.outdir}/macs2", mode: 'link'
 
@@ -394,7 +384,10 @@ process make_peakmatrix {
 
   tag "peak-cell-matrix"
 
+  container = 'quay.io/cellgeni/cellclusterer'
+
   publishDir "${params.outdir}/peak_matrix", mode: 'link'
+
 
   input:
   file metafile from ch_cellpeak.flatMap { ls -> ls.collect{ it.toString() } }.collectFile(name: 'peak.inputs', newLine: true)

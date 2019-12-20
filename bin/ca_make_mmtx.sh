@@ -9,10 +9,11 @@ rownames==
 n_entries=
 fn_matrix=
 thetype=
+transposeOpt=""
 output=mtx.gz
 
 
-while getopts :c:r:t:e:m:o:h opt
+while getopts :c:r:t:e:m:o:Th opt
 do
     case "$opt" in
     c)
@@ -32,6 +33,9 @@ do
       ;;
     o)
       output=$OPTARG
+      ;;
+    T)
+      transposeOpt="--transpose"
       ;;
     h)
       cat <<EOU
@@ -70,9 +74,9 @@ cat <<EOH
 $n_rows $n_cols $n_entries
 EOH
 if [[ $thetype == 'pattern' ]]; then
-  mcxdump -imx $fn_matrix --no-values | perl -ane 'print $F[0]+1, "\t", $F[1]+1, "\n";'
+  mcxdump $transposeOpt -imx $fn_matrix --no-values | perl -ane 'print $F[0]+1, "\t", $F[1]+1, "\n";'
 elif [[ $thetype == 'integer' ]]; then
-  mcxdump -imx $fn_matrix | perl -ane 'print $F[0]+1, "\t", $F[1]+1, "\t", int($F[2]), "\n";'
+  mcxdump $transposeOpt -imx $fn_matrix | perl -ane 'print $F[0]+1, "\t", $F[1]+1, "\t", int($F[2]), "\n";'
 fi
 ) | gzip > $output
 

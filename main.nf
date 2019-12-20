@@ -122,10 +122,12 @@ ch_demuxed
   
 
 process make_big_matrix {
+
   cpus 1
   memory 20.GB
+  container 'quay.io/cellgeni/cellclusterer'
 
-  publishDir "${params.outdir}/cellmetadata", mode: 'link'
+  publishDir "${params.outdir}/cellmetadata", mode: 'link', pattern: 'cell2win.mcx'
 
   input:
   file all_edges from ch_matrix.collect()
@@ -134,6 +136,7 @@ process make_big_matrix {
 
   output:
   file 'cell2win.mcx' into ch_cell2win
+  set file('cell2win.mcx'), file(celltab), file(wintab) into ch_dump_big_matrix
 
   shell:
   '''
@@ -143,56 +146,116 @@ process make_big_matrix {
 }
 
 
+process mmtx_big_matrix  {
+  cpus 1
+  memory 10.GB
+  container 'quay.io/cellgeni/cellclusterer'
+
+  publishDir "${params.outdir}/matrix", mode: 'link'
+
+  output:
+  file 'raw_window_bc_matrix.mmtx.gz'
+  file '*.txt'
+
+  input:
+  set file('cell2win.mcx'), file('celltab'), file('wintab') from ch_dump_big_matrix
+
+  script:
+  '''
+  # fixme build new image with datamash
+  # n_entries=$(mcx query -imx cell2win.mcx | tail -n +2 | datamash sum 2
+  n_entries=$(mcx query -imx cell2win.mcx | tail -n +2 | perl -ane 'chomp; $sum+=$_; END { print $sum }')
+  ca_make_mmtx.sh -r wintab -c celltab -m cell2win.mcx -e $n_entries -t integer -o raw_window_bc_matrix.mmtx.gz
+  cp celltab raw_bc.txt
+  cp wintab  raw_window.txt
+  '''
+}
+
+
 //      ^----- split between demux part and analysis part -----_      //
 
 
-process clusters_define_cusanovich2018 {
+process load_bed_data {
 
-  tag "bottleneck"
+  tag "bed-mcx-mmtx"
 
-  publishDir "$params.outdir/qc", mode: 'link'
+  cpus = 2
+  memory = 10.GB
+  container = 'quay.io/cellgeni/cellclusterer'
+
+  publishDir "$params.outdir/matrix", mode: 'link', pattern: 'other_publish/filtered*',
+    saveAs: { fname -> fname - ~/other_publish\// }
 
   when: true
 
   input:
   file('cellmetadata') from ch_metadata
   file('cell2winmtx') from ch_cell2win
-  val nclades   from  params.nclades
-  val npcs      from  params.npcs
-  val sampleid  from  params.sampleid
   val ntfs      from  params.ntfs
 
   output:
-  file('cus.obj.*.clades.tsv') into ch_P4_clades
-  file('cus.qc.*.pdf')
-  file('cus.obj.*')
+  file('outputs') into ch_load_mmtx
+  file('other_publish/filtered*')
 
   shell:          
   '''
+              # fixme, filtered_window_bc_matrix is still an implicit output from ca_top_region.sh
   mkdir matrix
+  mkdir outputs
+  mkdir other_publish
   cd matrix
   ca_top_region.sh \\
       -c ../cellmetadata/cells.tab    \\
       -w ../cellmetadata/win.tab      \\
       -m ../cell2winmtx               \\
       -n !{ntfs}                      \\
-      -C filtered_cell.stats          \\
-      -W win.stats                    \\
-      -R regions.names                \\
-      -N cells.names
+      -C ../outputs/filtered_cell.stats          \\
+      -W ../outputs/win.stats                    \\
+      -R ../outputs/regions.names                \\
+      -X ../outputs/filtered_window_bc_matrix.mmtx.gz  \\
+      -N ../outputs/cells.names
 
-  cd ..
+  ln ../outputs/regions.names    ../other_publish/filtered_win.txt
+  ln ../outputs/cells.names      ../other_publish/filtered_bc.txt
+  ln ../outputs/filtered_window_bc_matrix.mmtx.gz   ../other_publish
+  ln ../outputs/filtered_cell.stats                 ../other_publish
+  '''
+}
 
+
+process do_the_clustering {
+
+  tag "cusanovich2018"
+
+  cpus = 2
+  memory = 30.GB
+  container = 'quay.io/cellgeni/cellclusterer'
+
+  publishDir "$params.outdir/qc", mode: 'link', pattern: 'cus.*'
+
+  input:
+  val nclades   from  params.nclades
+  val sampleid  from  params.sampleid
+  val npcs      from  params.npcs
+  file('inputs') from ch_load_mmtx
+
+  output:
+  file('cus.obj.*.clades.tsv') into ch_P4_clades
+  file('cus.qc.*.pdf')
+  file('cus.obj.*')
+
+  shell:
+  '''
   ln -s !{baseDir}/bin/cusanovich2018_lib.r .
   R --slave --quiet --no-save --args  \\
   --nclades=!{nclades}                \\
   --npcs=!{npcs}                      \\
-  --matrix=matrix/mtx.gz              \\
-  --winstats=matrix/win.stats         \\
-  --cellstats=matrix/filtered_cell.stats  \\
+  --matrix=inputs/filtered_window_bc_matrix.mmtx.gz  \\
+  --regionnames=inputs/regions.names  \\
+  --cellnames=inputs/cells.names      \\
+  --winstats=inputs/win.stats         \\
+  --cellstats=inputs/filtered_cell.stats  \\
   --sampleid=!{sampleid}              \\
-  --regionnames=matrix/regions.names  \\
-  --cellnames=matrix/cells.names      \\
   < !{baseDir}/bin/cluster_cells_cusanovich2018.R
   '''
 }
@@ -339,15 +402,20 @@ process make_peakmatrix {
   file('cellnames.txt') from ch_index_names
 
   output:
-  file('cell2peak.gz')
+    // file('cell2peak.gz')
+  file('peaks_bc_matrix.mmtx.gz')
+  file('bc_peaks_matrix.mmtx.gz')
   file('peaks.txt')
-  file('cells.txt')
+  file('bc.txt')
 
   shell:
   '''
+                  # fixme: hardcoded output names.
   ca_peak_matrix.sh -c cellnames.txt -p masterpeak.bed -i peak.inputs
   '''
 }
+
+
 
 
 

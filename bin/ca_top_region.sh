@@ -23,9 +23,10 @@ o_winstats=win.stats
 o_cellstats=cell.stats
 o_regions_names=regions.names
 o_cells_names=cells.names
+o_mmtx=filtered_window_bc_matrix.mmtx.gz
 
 
-while getopts :m:w:N:W:c:C:R:n:Fh opt
+while getopts :m:w:N:W:c:C:X:R:n:Fh opt
 do
     case "$opt" in
     c)
@@ -45,6 +46,9 @@ do
       ;;
     R)
       o_regions_names=$OPTARG
+      ;;
+    X)
+      o_mmtx=$OPTARG
       ;;
     m)
       cell2winmtx=$OPTARG
@@ -133,6 +137,7 @@ export MCLXIOVERBOSITY=2
 >&2 echo "Producing matrixmarket format"
   n_entries=$(perl -ane '$S+=$F[1]; END{print "$S\n";}' __win_TAG.stats)
 
-  ca_make_mmtx.sh -r __win_TAG.names -c $o_cells_names -m __win2cell_TAG.reindexed -e $n_entries -t pattern -o mtx.gz
+  ca_make_mmtx.sh -r __win_TAG.names -c $o_cells_names -m __win2cell_TAG.reindexed \
+      -e $n_entries -t pattern -o $o_mmtx
 
 

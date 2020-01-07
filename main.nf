@@ -362,7 +362,7 @@ process cells_masterlist_coverage {
 
   file(celldef_list) from ch_cellpaths_peakcov
     .collate(params.cellbatchsize)
-    .map { it.join('\n') }
+    .map { it.join('\n') + '\n' }
 
   output:
   file('*.mp.txt') into ch_cellpeak

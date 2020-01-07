@@ -84,8 +84,8 @@ n_entries=$(tail -n +2 peak2cell.stats | perl -ane '$S+=$F[1]; END{print "$S\n";
  #  Output to matrixmarket format
 #   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-ca_make_mmtx.sh -r peaks.txt -c cells.txt -m peak2cell.mcx -e $n_entries -t integer -o bc_peaks_matrix.mmtx.gz
-ca_make_mmtx.sh -r peaks.txt -c cells.txt -m peak2cell.mcx -e $n_entries -t integer -o peaks_bc_matrix.mmtx.gz -T
+ca_make_mmtx.sh -r peaks.txt -c cells.txt -m peak2cell.mcx -e $n_entries -t integer -o peaks_bc_matrix.mmtx.gz
+ca_make_mmtx.sh -r peaks.txt -c cells.txt -m peak2cell.mcx -e $n_entries -t integer -o bc_peaks_matrix.mmtx.gz -T
 # various naming schemes exist. Maybe we'll use bc.
 ln cells.txt bc.txt
 

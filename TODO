@@ -1,9 +1,12 @@
 
-- perhaps get rid of the precious bucket structure.
+- Perhaps get rid of the bucket structure; it is no longer needed given that we demultiplex
+  in the pipeline rather than outside, and given that we divide the cells into batches.
+  However, it works and might become useful if the number of cells grow very large; we
+  keep it for now.
 
 - check
   clusters_makebam_P4
-  we make bed file for macs2 where all features are on the positive strand.
+  We make bed file for macs2 where all features are on the positive strand.
   Any issue with this?
   Test whether macs2 picks up depth. Maybe ask even.
 
@@ -17,6 +20,7 @@
 - potentially streaming etc format is a wee bit faster. Very low priority.
 
 - explicit outputs in matrixmarket creation (generally hardcoded names).
+  Most of this is fixed now, except for the final bc/peak matrices.
 
 - -c argument to cellatac script; check/select only the files that are there,
   i.e.  cope with drop-outs. currently expects all cells/barcodes to succeed.

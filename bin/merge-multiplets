@@ -1,0 +1,322 @@
+#!/usr/bin/env python
+"""Merge 10x scATAC multiplets, using method similar to bap
+
+Usage: merge-multiplets --chrom <file> [options] <input> <output>
+
+Options:
+  --chrom <file>    Chromosome size table, in desired chrom order, only first two columns considered
+  --bc <file>       A list of cell barcodes to consider, use inflection-point as cutoff if omitted
+  --max-n <int>     Upper limit of number of non-empty barcodes, used for inflection-point finding [default: 10000]
+  --outfrg <file>   Write filtered and corrected fragments
+  --debug           Print debug information
+  --profile         Print profile information
+  <input>           Input position sorted fragments file in cellranger format (fragments.tsv.gz)
+  <output>          Output barcode mapping
+"""
+
+
+import gzip
+import logging
+import signal
+import sys
+from itertools import combinations
+import numpy as np
+import pandas as pd
+import scipy.sparse as sp
+signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+
+
+def read_chrom_sizes(chrom_fn):
+    chrom_sizes = {}
+    with open(chrom_fn) as f:
+        for line in f:
+            chrom, size = line.rstrip().split()[0:2]
+            chrom_sizes[chrom] = int(size)
+    return chrom_sizes
+
+
+def check_chrom_compatibility(frg_fn, chroms):
+    test_fragments = pd.read_csv(
+        frg_fn,
+        sep='\t',
+        names=['chrom', 'start', 'end', 'barcode', 'count'],
+        dtype={'chrom': 'category', 'start': int, 'end': int, 'barcode': 'category', 'count': int},
+        nrows=1,
+    )
+    if test_fragments.chrom[0] not in chroms:
+        raise ValueError("chrom specification dont't match.")
+
+
+def read_fragments(frg_fn, chroms=None):
+    logging.debug('started')
+    fragments = pd.read_csv(
+        frg_fn,
+        sep='\t',
+        names=['chrom', 'start', 'end', 'barcode', 'count'],
+        dtype={'chrom': 'category', 'start': int, 'end': int, 'barcode': 'category', 'count': int},
+    )
+    if chroms:
+        k = fragments.chrom.isin(chroms)
+        if sum(k) < fragments.shape[0]:
+            fragments = fragments.loc[k, :]
+        fragments.chrom.cat.remove_unused_categories(inplace=True)
+        fragments.chrom.cat.reorder_categories(chroms, inplace=True)
+        fragments.barcode.cat.remove_unused_categories(inplace=True)
+    logging.debug('done')
+    return fragments
+
+
+def read_barcodes(bc_fn):
+    logging.debug('started')
+    barcodes = sorted(pd.read_csv(bc_fn, header=None, names=['bc'])['bc'].to_list())
+    logging.debug('done')
+    return barcodes, {bc: i for i, bc in enumerate(barcodes)}
+
+
+def running_mean(x, N):
+    cumsum = np.cumsum(np.insert(x, 0, 0))
+    return (cumsum[N:] - cumsum[:-N]) / float(N)
+
+
+def find_threshold(y, smooth_window=50, max_n=10000, plot=None):
+    """Find local minimum of the 1st numeric derivative of knee point in the specified range"""
+    logging.debug('started')
+    i = smooth_window // 2
+    y = y[np.argsort(-y)]
+    y = np.log10(y[y>0])
+    x = 1 + np.arange(y.shape[0])
+    x = np.log10(x)
+    dy = np.diff(y)/np.diff(x)
+    dy = running_mean(dy, smooth_window)
+    k = np.argmin(dy[0:max_n])
+    threshold = y[k+i]
+    if plot and (plot.endswith('png') or plot.endswith('pdf')):
+        import matplotlib.pyplot as plt
+        plt.switch_backend('Agg')
+        plt.plot(x, y)
+        plt.hlines(threshold, xmin=min(x), xmax=max(x), linewidth=1)
+        plt.savefig(plot)
+    logging.debug('done')
+    return 10**threshold
+
+
+def count_shared_fragments(frg_fn, chrom_dict, barcode_dict, max_frag_count=6):
+    """Count number of shared fragments between pairs of barcodes"""
+    logging.debug('started')
+    N = len(barcode_dict)
+    frag_count = np.zeros(N, dtype=np.uint32)
+    shared_frag_count = sp.dok_matrix((N,N), dtype=np.uint32)
+    bcs = []
+    prev_chrom, prev_start, prev_stop = '', 0, 0
+    f = gzip.open(frg_fn, 'rt') if frg_fn.endswith('.gz') else open(frg_fn)
+    for line in f:
+        chrom, start, stop, bc, _ = line.rstrip('\n').split('\t')
+        if chrom not in chrom_dict or bc not in barcode_dict:
+            continue
+        if chrom != prev_chrom or start != prev_start or stop != prev_stop:
+            cnt = len(bcs)
+            if cnt > max_frag_count:
+                pass
+            else:
+                if cnt <= 1:
+                    pass
+                elif cnt == 2:
+                    bc1, bc2 = sorted(bcs)
+                    shared_frag_count[bc1, bc2] += 1
+                else:
+                    for bc1, bc2 in combinations(sorted(bcs), 2):
+                        shared_frag_count[bc1, bc2] += 1
+                for i in bcs:
+                    frag_count[i] += 1
+            bcs = []
+        bcs.append(barcode_dict[bc])
+        prev_chrom, prev_start, prev_stop = chrom, start, stop
+    f.close()
+    cnt = len(bcs)
+    if cnt > max_frag_count:
+        pass
+    else:
+        if cnt <= 1:
+            pass
+        elif cnt == 2:
+            bc1, bc2 = sorted(bcs)
+            shared_frag_count[bc1, bc2] += 1
+        else:
+            for bc1, bc2 in combinations(sorted(bcs), 2):
+                shared_frag_count[bc1, bc2] += 1
+        for i in bcs:
+            frag_count[i] += 1
+    logging.debug('done')
+    return shared_frag_count.tocoo(), frag_count
+
+
+def calculate_bap_score(shared_frag_count, frag_count):
+    """Calculate bap score from counts"""
+    logging.debug('started')
+    sfc = shared_frag_count
+    bap_score = sp.dok_matrix(sfc.shape)
+    for i, j, v in zip(sfc.row, sfc.col, sfc.data.astype(float)):
+        n = frag_count[i] + frag_count[j]
+        bap_score[i, j] = v / (n - v)
+    logging.debug('done')
+    return bap_score.tocoo()
+
+
+def merge_entries(bap_score, frag_count, min_bap):
+    """Merge barcodes in descending order of similarity"""
+    logging.debug('started')
+    multiplet_map = {}
+    bs = bap_score
+    k = bs.data >= min_bap
+    pairs = pd.DataFrame({'bc1': bs.row[k], 'bc2': bs.col[k], 'bap': bs.data[k]}).sort_values(
+        'bap', ascending=False)
+    for _, pair in pairs.iterrows():
+        i1 = pair.bc1.astype(int)
+        i2 = pair.bc2.astype(int)
+        fc1 = frag_count[i1]
+        fc2 = frag_count[i2]
+        major, minor = (i1, i2) if fc1 > fc2 else (i2, i1)
+        if minor not in multiplet_map or frag_count[multiplet_map[minor]] < max(fc1, fc2):
+            multiplet_map[minor] = major
+        elif major not in multiplet_map:
+            multiplet_map[major] = minor
+    for minor in list(multiplet_map.keys()):
+        major = multiplet_map[minor]
+        while major in multiplet_map:
+            major = multiplet_map[major]
+        multiplet_map[minor] = major
+    logging.debug('done')
+    return multiplet_map
+
+
+def merge_entries2(bap_score, frag_count, min_bap):
+    """Merge barcodes in descending order of frequency (bap-style)"""
+    logging.debug('started')
+    multiplet_map = {}
+    bs = bap_score
+    k = bs.data >= min_bap
+    pairs = pd.DataFrame({'bc1': bs.row[k], 'bc2': bs.col[k], 'bap': bs.data[k]})
+    bcs = sorted(
+        list(set(pairs.bc1.unique()) | set(pairs.bc2.unique())),
+        key=lambda x: frag_count[x],
+        reverse=True)
+    merged = {}
+    for bc in bcs:
+        if bc not in merged:
+            candidates = pairs.bc1[pairs.bc2 == bc].to_list() + pairs.bc2[pairs.bc1 == bc].to_list()
+            for c_bc in candidates:
+                if c_bc not in merged:
+                    multiplet_map[c_bc] = bc
+                    merged[c_bc] = 1
+    logging.debug('done')
+    return multiplet_map
+
+
+def update_fragments(frg_fn, out_fn, barcodes, barcode_dict, multiplet_map, max_frag_count=6):
+    """write fragment file with corrected cell barcoding"""
+    logging.debug('started')
+    frgs = []
+    prev_chrom, prev_start, prev_stop = '', 0, 0
+    fout = gzip.open(out_fn, 'wt', compresslevel=4) if out_fn.endswith('.gz') else open(out_fn, 'w')
+    f = gzip.open(frg_fn, 'rt') if frg_fn.endswith('.gz') else open(frg_fn)
+    for line in f:
+        chrom, start, stop, bc, freq = line.rstrip('\n').split('\t')
+        if bc not in barcode_dict:
+            continue
+        if chrom != prev_chrom or start != prev_start or stop != prev_stop:
+            cnt = len(frgs)
+            if cnt > max_frag_count:
+                pass
+            else:
+                for frg in frgs:
+                    barcode = frg[3]
+                    i = barcode_dict[barcode]
+                    if i in multiplet_map:
+                        barcode = barcodes[multiplet_map[i]]
+                    print(f'{frg[0]}\t{frg[1]}\t{frg[2]}\t{barcode}\t{frg[4]}', file=fout)
+            frgs = []
+        frgs.append([chrom, start, stop, bc, freq])
+        prev_chrom, prev_start, prev_stop = chrom, start, stop
+    f.close()
+    cnt = len(frgs)
+    if cnt > max_frag_count:
+        pass
+    else:
+        for frg in frgs:
+            barcode = frg[3]
+            i = barcode_dict[barcode]
+            if i in multiplet_map:
+                barcode = barcodes[multiplet_map[i]]
+            print(f'{frg[0]}\t{frg[1]}\t{frg[2]}\t{barcode}\t{frg[4]}', file=fout)
+    fout.close()
+    logging.debug('started')
+
+
+def merge_multiplets(frg_fn, out_fn, chrom_sizes, bc_fn=None, max_n=10000, out_frg_fn=None):
+    """Merge multiplet barcodes"""
+    logging.debug('started')
+    chroms = list(chrom_sizes.keys())
+
+    check_chrom_compatibility(frg_fn, chroms)
+
+    if bc_fn:
+        cell_barcodes, bc_dict = read_barcodes(bc_fn)
+    else:
+        fragments = read_fragments(frg_fn, chroms=chroms)
+        n_frag_per_barcode = fragments.groupby('barcode').size()
+        min_counts = find_threshold(n_frag_per_barcode.values, max_n=max_n, plot='cell_calling.png')
+        n_frag_per_barcode = n_frag_per_barcode[n_frag_per_barcode.values >= min_counts].to_dict()
+        cell_barcodes = list(n_frag_per_barcode.keys())
+        bc_dict = {bc: i for i, bc in enumerate(cell_barcodes)}
+
+    shared_frag_count, frag_count = count_shared_fragments(frg_fn, chrom_sizes, bc_dict)
+    bap_score = calculate_bap_score(shared_frag_count, frag_count)
+    min_bap = find_threshold(bap_score.data, max_n=max_n, plot='multiplet_calling.png')
+
+    multiplet_map = merge_entries(bap_score, frag_count, min_bap)
+
+    with open(out_fn, 'w') as fout:
+        for k, v in multiplet_map.items():
+            print(f'{cell_barcodes[k]}\t{cell_barcodes[v]}', file=fout)
+
+    if out_frg_fn:
+        update_fragments(frg_fn, out_frg_fn, cell_barcodes, bc_dict, multiplet_map)
+    logging.debug('done')
+
+
+def main(args):
+    logging.debug(args)
+
+    in_fn = args['input']
+    out_fn = args['output']
+    in_bc = args['bc']
+    max_n = int(args['max-n'])
+    chrom_sizes = read_chrom_sizes(args['chrom'])
+    out_frg_fn = args['outfrg']
+
+    merge_multiplets(in_fn, out_fn, chrom_sizes, bc_fn=in_bc, max_n=max_n, out_frg_fn=out_frg_fn)
+
+    return 0
+
+
+if __name__ == '__main__':
+    from docopt import docopt
+    args = docopt(__doc__)
+    args = {k.lstrip('-<').rstrip('>'): args[k] for k in args}
+    try:
+        if args.get('debug'):
+            log_level = logging.DEBUG
+        else:
+            log_level = logging.WARN
+        logging.basicConfig(
+            level=log_level,
+            format='%(asctime)s; %(levelname)s; %(funcName)s; %(message)s',
+            datefmt='%y-%m-%d %H:%M:%S')
+        if args.get('profile'):
+            import cProfile
+            cProfile.run('main(args)')
+        else:
+            main(args)
+    except KeyboardInterrupt:
+        logging.warning('Interrupted')
+        sys.exit(1)

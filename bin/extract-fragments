@@ -1,0 +1,51 @@
+#!/bin/bash
+
+MIN_MQ=30
+DEFAULT_NCPU=8
+
+inBam=$1
+outTsv=$2
+ncpu=$3
+suffix=$4
+
+set -eou pipefail
+
+usage() {
+    echo "Usage: $(basename $0) <inBam> <outTsv> [ncpu] [suffix]"
+    echo "<inBam>:  input cellranger BAM"
+    echo "<outTsv>: output fragment.tsv(.gz)"
+    echo "[ncpu]: number of CPUs to use, default $DEFAULT_NCPU"
+    echo "[suffix]: suffix appended to barcodes, default ''"
+    exit 0
+}
+
+
+if [[ -z $outTsv ]]; then
+    usage
+fi
+
+compress=
+if [[ "${outTsv: -3}" == ".gz" ]]; then
+    outTsv="${outTsv/.gz/}"
+    compress=1
+fi
+
+if [[ -z $ncpu ]]; then
+    ncpu=$DEFAULT_NCPU
+fi
+
+st_ncpu=3
+if (( $st_ncpu > $ncpu )); then
+    st_ncpu=$ncpu
+fi
+
+samtools view -@ $st_ncpu -q $MIN_MQ -f 0x2 -F 0x10C $inBam \
+    | awk '$9>=50 && $9<=1000 && $7=="="' | cut -f3,4,9,12- \
+    | perl -sne '/^(\S+)\s(\S+)\s(\S+)\s.*CB:Z:(\S+)/ && print $1, "\t", $2, "\t", $2+$3, "\t", $4, $sffx, "\n";' -- -sffx=$suffix > ${outTsv}_unsorted \
+&& \
+LANG="C" sort -k1,1 -k2,2n -k3,3n -k4,4 --parallel=${ncpu} ${outTsv}_unsorted | uniq -c | awk -v OFS='\t' '{print $2,$3,$4,$5,$1}' > $outTsv \
+&& rm -f ${outTsv}_unsorted
+
+if [[ ! -z $compress ]]; then
+    pigz -p ${ncpu} ${outTsv}
+fi

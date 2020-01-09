@@ -13,9 +13,12 @@ params.outdir        =  'results'
 params.sampleid      =  'thesamp'       // Used in some names of output files
 
 params.winsize       =  5000            // bin size for genome
+params.nbcest        =  10000           // estimated number of non-empty barcodes.
 params.nclades       =  10
 params.ntfs          =  20000
 params.npcs          =  20
+
+params.mermul        =  false
 
 
 if (!params.fragments || !params.cellcsv || !params.posbam) {
@@ -23,32 +26,33 @@ if (!params.fragments || !params.cellcsv || !params.posbam) {
 }
 
 
-// Channel.fromPath(params.cellfile).until { false}.set { ch_get_cells }
+ch_fragments_cr = params.mermul ? Channel.empty() : Channel.fromPath(params.fragments)
+
 thecellfile = file(params.cellcsv)
-thefragfile = file(params.fragments)
 thebamfile  = file(params.posbam)
 
 
       // fixme noteme stick idxstats in here if needed
-process prepare {
+process prepare_cr {
 
-  tag "$cellbatchsize"
+  tag "cr-prep $cellbatchsize"
 
   publishDir "${params.outdir}", pattern: 'cellmetadata',   mode: 'copy'
 
+  when: !params.mermul
+
   input:
-  set file(f_cells), file(fragments), file(posbam) from Channel.from([[thecellfile, thefragfile, thebamfile]])
+  set file(f_cells), file(posbam) from Channel.from([[thecellfile, thebamfile]])
   val cellbatchsize from params.cellbatchsize
   val winsize from params.winsize
 
   output:
-  file('cellmetadata/cells.tab')    into ch_celltab
-  file('cellmetadata/win.tab')      into ch_wintab
-  file('cellmetadata/cells.names')  into ch_index_names
-  file('cellmetadata')              into ch_metadata
-  file('cellmetadata/sample.chrlen')    into (ch_chrom_length, ch_chrom_length2)
-  file('c_c.*') into ch_demux_batch
-                                    // file('chosen_cells.info')
+  file('cellmetadata/cells.tab')    into ch_celltab_cr
+  file('cellmetadata/win.tab')      into ch_wintab_cr
+  file('cellmetadata/cells.names')  into ch_index_names_cr
+  file('cellmetadata')              into ch_metadata_cr
+  file('cellmetadata/sample.chrlen')    into (ch_chrom_length_cr, ch_chrom_length2_cr)
+  file('c_c.*') into ch_demux_batch_cr
 
   shell:
   filter = params.ncell > 0 ? "head -n ${params.ncell}" : "cat"
@@ -80,6 +84,78 @@ process prepare {
 }
 
 
+process prepare_mm {        // merge multiplets
+
+  tag "mm-prep $cellbatchsize"
+
+  publishDir "${params.outdir}", pattern: 'cellmetadata_mm',   mode: 'copy'
+
+  when: params.mermul
+
+  input:
+  set file(f_cells), file(posbam) from Channel.from([[thecellfile, thebamfile]])
+  val cellbatchsize from params.cellbatchsize
+  val winsize from params.winsize
+
+  output:
+  file('cellmetadata/cells.tab')    into ch_celltab_mm
+  file('cellmetadata/win.tab')      into ch_wintab_mm
+  file('cellmetadata/cells.names')  into ch_index_names_mm
+  file('cellmetadata')              into ch_metadata_mm
+  file('cellmetadata/sample.chrlen')    into (ch_chrom_length_mm, ch_chrom_length2_mm)
+  file('c_c.*') into ch_demux_batch_mm
+
+  file('fragmints2.tsv.gz')         into ch_fragments_mm
+
+  shell:
+  '''
+  mkdir -p cellmetadata
+# Chrosome length file.
+  samtools view -H !{posbam}  \\
+    | grep '@SQ'$'\\t''SN:'    \\
+    | perl -ne '/\\bSN:(\\S+)/ && ($name=$1); /\\bLN:(\\d+)/ && ($len=$1); print "$name\\t$len\\n";' \\
+    | uniq                    \\
+    > cellmetadata/sample.chrlen.all
+
+# get the main chromosomes. WARNING DANGERSIGN very crude regular expression filter.
+# This filter basically avoids underscores and allows otherwise alphanumerical.
+# TODO print joined string of all chromosomes for user perusal.
+  grep -i 'chr[a-z0-9][a-z0-9]*\\>' cellmetadata/sample.chrlen.all > cellmetadata/sample.chrlen
+
+#
+  extract-fragments !{posbam} fragmints.tsv.gz !{task.cpus}
+
+#
+  merge-multiplets --chrom cellmetadata/sample.chrlen --max-n !{params.nbcest} --debug --outfrg fragmints2.tsv.gz fragmints.tsv.gz cellmetadata/bc-mm.map
+
+# Just the names of selected cells.
+  cut -f 2 cellmetadata/bc-mm.map | sort > cellmetadata/cells.names
+
+# Tab file for mcx matrix loading
+  nl -v0 -nln -w1 < cellmetadata/cells.names > cellmetadata/cells.tab
+
+# Batch lists for demuxing
+  split -l !{cellbatchsize} cellmetadata/cells.names c_c.
+
+# Tab file for windows
+  ca_make_chromtab.pl !{winsize} cellmetadata/sample.chrlen > cellmetadata/win.tab
+  '''
+}
+
+
+// The merge-multiplet code was inserted in a clone of the preparation process.
+// below are all the merging Y-junctions for plumbing the channels to the same destination.
+
+  ch_celltab_cr.mix(ch_celltab_mm).set { ch_celltab }
+  ch_wintab_cr.mix(ch_wintab_mm).set { ch_wintab }
+  ch_index_names_cr.mix(ch_index_names_mm).set { ch_index_names }
+  ch_metadata_cr.mix(ch_metadata_mm).set { ch_metadata }
+  ch_chrom_length_cr.mix(ch_chrom_length_mm).set { ch_chrom_length }
+  ch_chrom_length2_cr.mix(ch_chrom_length2_mm).set { ch_chrom_length2 }
+  ch_demux_batch_cr.mix(ch_demux_batch_mm).set { ch_demux_batch }
+
+  ch_fragments_cr.mix(ch_fragments_mm).set { ch_fragments }
+
 
 /* The demux part does a complicated thing with buckets.
    This is a remnant from a time when everything was published in a bucket structure first.
@@ -92,7 +168,7 @@ process demux {
 
   input:
   file cells from ch_demux_batch.flatten()
-  file frag from thefragfile
+  file frags from ch_fragments
 
   output:
   file('celldata/[ACGT][ACGT][ACGT][ACGT]/*.bed') into ch_demuxed
@@ -103,7 +179,7 @@ process demux {
   thetag = cells.toString() - 'c_c.'
   '''
   mkdir -p celldata
-  zcat !{frag} | samdemux.pl --barcodefile=!{cells} --outdir=celldata --bucket --fragments --ntest=0 --fnedges=mtx.!{thetag}.edges
+  zcat !{frags} | samdemux.pl --barcodefile=!{cells} --outdir=celldata --bucket --fragments --ntest=0 --fnedges=mtx.!{thetag}.edges
   # find celldata -name '*.bed' > !{thetag}.list
   '''
 }

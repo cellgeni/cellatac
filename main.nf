@@ -19,6 +19,7 @@ params.ntfs          =  20000
 params.npcs          =  20
 
 params.mermul        =  false
+params.usecls        =  false
 
 
 if (!params.fragments || !params.cellcsv || !params.posbam) {
@@ -27,6 +28,7 @@ if (!params.fragments || !params.cellcsv || !params.posbam) {
 
 
 ch_fragments_cr = params.mermul ? Channel.empty() : Channel.fromPath(params.fragments)
+ch_usercls = params.usecls ? Channel.empty() : Channel.fromPath(params.usecls)
 
 thecellfile = file(params.cellcsv)
 thebamfile  = file(params.posbam)
@@ -129,7 +131,7 @@ process prepare_mm {        // merge multiplets
   merge-multiplets --chrom cellmetadata/sample.chrlen --max-n !{params.nbcest} --debug --outfrg fragmints2.tsv.gz fragmints.tsv.gz cellmetadata/bc-mm.map
 
 # Just the names of selected cells.
-  cut -f 2 cellmetadata/bc-mm.map | sort > cellmetadata/cells.names
+  cut -f 2 cellmetadata/bc-mm.map | sort -u > cellmetadata/cells.names
 
 # Tab file for mcx matrix loading
   nl -v0 -nln -w1 < cellmetadata/cells.names > cellmetadata/cells.tab
@@ -298,6 +300,8 @@ process do_the_clustering {
 
   publishDir "$params.outdir/qc", mode: 'link', pattern: 'cus.*'
 
+  when: !params.usecls
+
   input:
   val nclades   from  params.nclades
   val sampleid  from  params.sampleid
@@ -325,6 +329,7 @@ process do_the_clustering {
   '''
 }
 
+ch_usercls.mix(ch_P4_clades).set{ ch_clustering }
 
 process clusters_index {
 
@@ -332,7 +337,7 @@ process clusters_index {
 
   input:
   file metafile from ch_cellpaths_cluster.collectFile(name: 'cov.inputs', newLine: true)
-  file cladefile from ch_P4_clades
+  file cladefile from ch_clustering
 
   output:
   file('clusinfo.cl*') into ch_clusterbam

@@ -19,7 +19,7 @@ params.ntfs          =  20000
 params.npcs          =  20
 
 params.mermul        =  false
-params.usecls        =  false
+params.usecls        =  '_'
 
 
 if (!params.fragments || !params.cellcsv || !params.posbam) {
@@ -28,7 +28,7 @@ if (!params.fragments || !params.cellcsv || !params.posbam) {
 
 
 ch_fragments_cr = params.mermul ? Channel.empty() : Channel.fromPath(params.fragments)
-ch_usercls = params.usecls ? Channel.empty() : Channel.fromPath(params.usecls)
+ch_usercls = params.usecls == '_' ? Channel.empty() : Channel.fromPath(params.usecls)
 
 thecellfile = file(params.cellcsv)
 thebamfile  = file(params.posbam)
@@ -170,7 +170,7 @@ process demux {
 
   input:
   file cells from ch_demux_batch.flatten()
-  file frags from ch_fragments
+  file frags from ch_fragments.collect()
 
   output:
   file('celldata/[ACGT][ACGT][ACGT][ACGT]/*.bed') into ch_demuxed
@@ -300,7 +300,7 @@ process do_the_clustering {
 
   publishDir "$params.outdir/qc", mode: 'link', pattern: 'cus.*'
 
-  when: !params.usecls
+  when: params.usecls == '_'
 
   input:
   val nclades   from  params.nclades

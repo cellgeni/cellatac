@@ -4,7 +4,7 @@
 Usage: merge-multiplets --chrom <file> [options] <input> <output>
 
 Options:
-  --chrom <file>    Chromosome size table, in desired chrom order, only first two columns considered
+  --chrom <file>    A two column table of the sizes of chromosomes to be considered
   --bc <file>       A list of cell barcodes to consider, use inflection-point as cutoff if omitted
   --max-n <int>     Upper limit of number of non-empty barcodes, used for inflection-point finding [default: 10000]
   --outfrg <file>   Write filtered and corrected fragments
@@ -60,7 +60,6 @@ def read_fragments(frg_fn, chroms=None):
         if sum(k) < fragments.shape[0]:
             fragments = fragments.loc[k, :]
         fragments.chrom.cat.remove_unused_categories(inplace=True)
-        fragments.chrom.cat.reorder_categories(chroms, inplace=True)
         fragments.barcode.cat.remove_unused_categories(inplace=True)
     logging.debug('done')
     return fragments
@@ -212,7 +211,7 @@ def merge_entries2(bap_score, frag_count, min_bap):
     return multiplet_map
 
 
-def update_fragments(frg_fn, out_fn, barcodes, barcode_dict, multiplet_map, max_frag_count=6):
+def update_fragments(frg_fn, out_fn, barcodes, chrom_dict, barcode_dict, multiplet_map, max_frag_count=6):
     """write fragment file with corrected cell barcoding"""
     logging.debug('started')
     frgs = []
@@ -221,7 +220,7 @@ def update_fragments(frg_fn, out_fn, barcodes, barcode_dict, multiplet_map, max_
     f = gzip.open(frg_fn, 'rt') if frg_fn.endswith('.gz') else open(frg_fn)
     for line in f:
         chrom, start, stop, bc, freq = line.rstrip('\n').split('\t')
-        if bc not in barcode_dict:
+        if chrom not in chrom_dict or bc not in barcode_dict:
             continue
         if chrom != prev_chrom or start != prev_start or stop != prev_stop:
             cnt = len(frgs)
@@ -276,11 +275,12 @@ def merge_multiplets(frg_fn, out_fn, chrom_sizes, bc_fn=None, max_n=10000, out_f
     multiplet_map = merge_entries(bap_score, frag_count, min_bap)
 
     with open(out_fn, 'w') as fout:
-        for k, v in multiplet_map.items():
-            print(f'{cell_barcodes[k]}\t{cell_barcodes[v]}', file=fout)
+        for i, cb in enumerate(cell_barcodes):
+            j = multiplet_map.get(i, i)
+            print(f'{cell_barcodes[i]}\t{cell_barcodes[j]}', file=fout)
 
     if out_frg_fn:
-        update_fragments(frg_fn, out_frg_fn, cell_barcodes, bc_dict, multiplet_map)
+        update_fragments(frg_fn, out_frg_fn, cell_barcodes, chrom_dict, bc_dict, multiplet_map)
     logging.debug('done')
 
 

@@ -280,7 +280,7 @@ def merge_multiplets(frg_fn, out_fn, chrom_sizes, bc_fn=None, max_n=10000, out_f
             print(f'{cell_barcodes[i]}\t{cell_barcodes[j]}', file=fout)
 
     if out_frg_fn:
-        update_fragments(frg_fn, out_frg_fn, cell_barcodes, chrom_dict, bc_dict, multiplet_map)
+        update_fragments(frg_fn, out_frg_fn, cell_barcodes, chrom_sizes, bc_dict, multiplet_map)
     logging.debug('done')
 
 

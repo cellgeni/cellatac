@@ -116,7 +116,7 @@ process prepare_mm {        // merge multiplets
   samtools view -H !{posbam}  \\
     | grep '@SQ'$'\\t''SN:'    \\
     | perl -ne '/\\bSN:(\\S+)/ && ($name=$1); /\\bLN:(\\d+)/ && ($len=$1); print "$name\\t$len\\n";' \\
-    | uniq                    \\
+    | uniq | sort -V           \\
     > cellmetadata/sample.chrlen.all
 
 # get the main chromosomes. WARNING DANGERSIGN very crude regular expression filter.

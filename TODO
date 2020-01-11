@@ -1,4 +1,9 @@
 
+- seurat, signac dep
+- merge-multiplets docopt dep
+- publish merge-multiplets images.
+
+
 - Perhaps get rid of the bucket structure; it is no longer needed given that we demultiplex
   in the pipeline rather than outside, and given that we divide the cells into batches.
   However, it works and might become useful if the number of cells grow very large; we

@@ -8,17 +8,9 @@ RUN apt-get install mcl datamash
 RUN Rscript -e 'install.packages(c("data.table", "dplyr", "Matrix", "stringr", "cowplot", "RColorBrewer", "ggpubr", "proxy", "irlba", "umap", "gplots", "Seurat"), dependencies = TRUE)'
 
 # Install Bioconductor packages, nothing for now.
-RUN Rscript -e 'BiocManager::install(c())'
+RUN Rscript -e 'install.packages(c("BiocManager"), dependencies = TRUE)'
 RUN Rscript -e 'BiocManager::install("multtest")'
 
-sudo apt-get install -y \
-    libssl-dev \
-    libhdf5-dev \
-    libcurl4-openssl-dev
-RUN Rscript -e 'BiocManager::install("Seurat")'
-
 # install github packages
-RUN Rscript -e 'devtools::install_github(c("caleblareau/BuenColors"))'
-
-
+RUN Rscript -e 'devtools::install_github(c("caleblareau/BuenColors", "timoast/signac"))'
 

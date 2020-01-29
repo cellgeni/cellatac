@@ -19,7 +19,7 @@ params.ntfs          =  20000
 params.npcs          =  20
 
 params.mermul        =  false
-params.usecls        =  '_'
+params.usecls        =  '__cusanovich__'
 
 
 if (!params.fragments || !params.cellcsv || !params.posbam) {
@@ -28,7 +28,7 @@ if (!params.fragments || !params.cellcsv || !params.posbam) {
 
 
 ch_fragments_cr = params.mermul ? Channel.empty() : Channel.fromPath(params.fragments)
-ch_usercls = params.usecls == '_' ? Channel.empty() : Channel.fromPath(params.usecls)
+ch_usercls = params.usecls =~ /^__.*__$/ ? Channel.empty() : Channel.fromPath(params.usecls)
 
 thecellfile = file(params.cellcsv)
 thebamfile  = file(params.posbam)
@@ -89,6 +89,8 @@ process prepare_cr {
 process prepare_mm {        // merge multiplets
 
   tag "mm-prep $cellbatchsize"
+
+  container 'quay.io/cellgeni/cellclusterer'
 
   publishDir "${params.outdir}", pattern: 'cellmetadata_mm',   mode: 'copy'
 
@@ -263,7 +265,7 @@ process filter_big_matrix {
   val ntfs      from  params.ntfs
 
   output:
-  file('outputs') into ch_load_mmtx
+  file('outputs') into (ch_load_mmtx, ch_load_mmtx2)
   file('other_publish/filtered*')
 
   shell:          
@@ -292,6 +294,46 @@ process filter_big_matrix {
 }
 
 
+process seurat_clustering {
+
+  tag "seurat2020"
+
+  container = 'quay.io/cellgeni/cellclusterer'
+
+  publishDir "$params.outdir/qc", mode: 'link', pattern: 'seurat.*'
+
+  when: params.usecls == '__seurat__'
+
+  input:
+  val nclades   from  params.nclades
+  val sampleid  from  params.sampleid
+  val npcs      from  params.npcs
+  file('singlecell.csv') from thecellfile
+  file('inputs') from ch_load_mmtx2
+
+  output:
+  file('seurat-clades.tsv') into ch_seurat_clades
+  file('seurat.pdf')
+  file('seurat*.rds')
+
+  shell:
+  '''
+  R --no-save < !{baseDir}/bin/ca_seurat_clades.R
+  ln -s !{baseDir}/bin/cusanovich2018_lib.r .
+  R --slave --quiet --no-save --args  \\
+  --nclades=!{nclades}                \\
+  --npcs=!{npcs}                      \\
+  --matrix=inputs/filtered_window_bc_matrix.mmtx.gz  \\
+  --regionnames=inputs/regions.names  \\
+  --cellnames=inputs/cells.names      \\
+  --winstats=inputs/win.stats         \\
+  --cellstats=inputs/filtered_cell.stats  \\
+  --sampleid=!{sampleid}              \\
+  < !{baseDir}/bin/cluster_cells_cusanovich2018.R
+  '''
+}
+
+
 process do_the_clustering {
 
   tag "cusanovich2018"
@@ -300,7 +342,7 @@ process do_the_clustering {
 
   publishDir "$params.outdir/qc", mode: 'link', pattern: 'cus.*'
 
-  when: params.usecls == '_'
+  when: params.usecls == '__cusanovich__'
 
   input:
   val nclades   from  params.nclades
@@ -329,7 +371,7 @@ process do_the_clustering {
   '''
 }
 
-ch_usercls.mix(ch_P4_clades).set{ ch_clustering }
+ch_usercls.mix(ch_P4_clades, ch_seurat_clades).set{ ch_clustering }
 
 process clusters_index {
 
@@ -433,6 +475,8 @@ process peaks_masterlist {
 process cells_masterlist_coverage {
 
   tag "${celldef_list}"
+
+  cache 'lenient'
 
   // publishDir "${params.outdir}/mp_counts"
   // A lot of files. This is simply the raw input for the cell/peak matrix.

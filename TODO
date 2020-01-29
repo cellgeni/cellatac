@@ -1,9 +1,17 @@
 
-! seurat, signac dep
+dependencies:
+    seurat, signac dep
+    install.packages("devtools")
+    devtools::install_github("timoast/signac")
+    singularity pull docker://quay.io/cellgeni/cellclustereR
 
+    python multiplet? pip install ...
+      numpy
+      pandas
+      scipy
 
-install.packages("devtools")
-devtools::install_github("timoast/signac")
+    samtools
+
 
 
 ! user-specified subset of cells

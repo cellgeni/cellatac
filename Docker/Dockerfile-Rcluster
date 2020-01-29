@@ -14,3 +14,7 @@ RUN Rscript -e 'BiocManager::install("multtest")'
 # install github packages
 RUN Rscript -e 'devtools::install_github(c("caleblareau/BuenColors", "timoast/signac"))'
 
+RUN apt-get install -y samtools pigz python3-pip bedtools
+
+RUN pip3 install pandas docopt
+

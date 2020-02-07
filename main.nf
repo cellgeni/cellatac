@@ -354,7 +354,7 @@ process do_the_clustering {
   file('inputs') from ch_load_mmtx
 
   output:
-  file('cus.obj.*.clades.tsv') into ch_P4_clades
+  file('cus.obj.*.clades.tsv') into ch_cusanovich_clades
   file('cus.qc.*.pdf')
   file('cus.obj.*')
 
@@ -374,7 +374,7 @@ process do_the_clustering {
   '''
 }
 
-ch_usercls.mix(ch_P4_clades, ch_seurat_clades).set{ ch_clustering }
+ch_usercls.mix(ch_cusanovich_clades, ch_seurat_clades).set{ ch_clustering }
 
 process clusters_index {
 
@@ -516,7 +516,7 @@ process cells_masterlist_coverage {
 
 process make_subset_peakmatrix {
 
-  tag "subset-peak-cell-matrix"
+  tag "${clustag} subset-peak-cell-matrix"
 
   container = 'quay.io/cellgeni/cellclusterer'
 

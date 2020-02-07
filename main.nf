@@ -19,7 +19,7 @@ params.ntfs          =  20000
 params.npcs          =  20
 
 params.mermul        =  false
-params.usecls        =  '__cusanovich__'
+params.usecls        =  '__seurat__'
 params.mergepeaks    =  true
 params.perclusterpeaks  =  false
 

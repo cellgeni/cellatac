@@ -20,6 +20,8 @@ params.npcs          =  20
 
 params.mermul        =  false
 params.usecls        =  '__cusanovich__'
+params.mergepeaks    =  true
+params.perclusterpeaks  =  false
 
 
 if (!params.fragments || !params.cellcsv || !params.posbam) {
@@ -53,7 +55,7 @@ process prepare_cr {
   file('cellmetadata/win.tab')      into ch_wintab_cr
   file('cellmetadata/cells.names')  into ch_index_names_cr
   file('cellmetadata')              into ch_metadata_cr
-  file('cellmetadata/sample.chrlen')    into (ch_chrom_length_cr, ch_chrom_length2_cr)
+  file('cellmetadata/sample.chrlen')    into ch_chrom_length_cr
   file('c_c.*') into ch_demux_batch_cr
 
   shell:
@@ -106,7 +108,7 @@ process prepare_mm {        // merge multiplets
   file('cellmetadata/win.tab')      into ch_wintab_mm
   file('cellmetadata/cells.names')  into ch_index_names_mm
   file('cellmetadata')              into ch_metadata_mm
-  file('cellmetadata/sample.chrlen')    into (ch_chrom_length_mm, ch_chrom_length2_mm)
+  file('cellmetadata/sample.chrlen')    into ch_chrom_length_mm
   file('c_c.*') into ch_demux_batch_mm
 
   file('fragmints2.tsv.gz')         into ch_fragments_mm
@@ -154,8 +156,9 @@ process prepare_mm {        // merge multiplets
   ch_wintab_cr.mix(ch_wintab_mm).set { ch_wintab }
   ch_index_names_cr.mix(ch_index_names_mm).set { ch_index_names }
   ch_metadata_cr.mix(ch_metadata_mm).set { ch_metadata }
-  ch_chrom_length_cr.mix(ch_chrom_length_mm).set { ch_chrom_length }
-  ch_chrom_length2_cr.mix(ch_chrom_length2_mm).set { ch_chrom_length2 }
+
+  ch_chrom_length_cr.mix(ch_chrom_length_mm).into { ch_chrom_length; ch_chrom_length2; ch_chrom_length3 }
+
   ch_demux_batch_cr.mix(ch_demux_batch_mm).set { ch_demux_batch }
 
   ch_fragments_cr.mix(ch_fragments_mm).set { ch_fragments }
@@ -192,7 +195,7 @@ process demux {
 ch_demuxed
   .flatMap()
   .map { it -> it.toString() - ~/.*celldata\/[ACGT]{4}\// - ~/\.bed/ + '\t' + it.toString()  }
-  .into { ch_cellpaths_cluster; ch_cellpaths_peakcov }
+  .into { ch_cellpaths_clusterindex; ch_cellpaths_masterpeakcov; ch_cellpaths_clustercov }
   
 
 process make_big_matrix {
@@ -378,11 +381,11 @@ process clusters_index {
   tag "${cladefile}"
 
   input:
-  file metafile from ch_cellpaths_cluster.collectFile(name: 'cov.inputs', newLine: true)
+  file metafile from ch_cellpaths_clusterindex.collectFile(name: 'cov.inputs', newLine: true)
   file cladefile from ch_clustering
 
   output:
-  file('clusinfo.cl*') into ch_clusterbam
+  file('clusinfo.cl*') into ch_clusinfo
 
   shell:
   '''
@@ -390,22 +393,27 @@ process clusters_index {
   '''
 }
 
+ch_clusinfo.flatMap().map { [ it.baseName - 'clusinfo.cl', it ] }.into { ch_cat_cluster_inputs; ch_per_cluster_inputs }
+
 
   // This process derives the cluster tag from the file name. We only need to do this once,
   // in subsequent processes we can pass this tag on.
 
 
-process clusters_makebam {
+process clusters_merge_inputs {
 
   tag "${clustag}"
 
   publishDir "${params.outdir}/clusdef", mode: 'link'
 
   input:
-  set val(clustag), file(clusmetafile) from ch_clusterbam.flatMap().map { [ it.baseName - 'clusinfo.cl', it ] }
+  set val(clustag), file(clusmetafile) from ch_cat_cluster_inputs
 
   output:
   set val(clustag), file("cluster.${clustag}.b??") into ch_clustermacs
+  
+                      // Fixme noteme b?? captures both bed and bam.  A bit fragile; but bam is
+                      // probably not needed anymore, and a new format unlikely. Still, noted.
 
   shell:
   '''
@@ -428,7 +436,7 @@ process clusters_macs2 {
 
   output:
   set file('*.xls'), file('*.bed')
-  file('*.narrowPeak') into ch_combine_clusterpeaks
+  set val(clustag), file('*.narrowPeak') into ch_combine_clusterpeaks, ch_per_cluster_analysis
 
   shell:
   '''
@@ -445,15 +453,17 @@ process clusters_macs2 {
 }
 
 
-process peaks_masterlist {
+process peaks_makemasterlist {
 
   tag "masterlist"
 
   publishDir "${params.outdir}/peaks", mode: 'link'
 
+  when: params.mergepeaks
+
   input:
-  file np_files from ch_combine_clusterpeaks.collect()
-  file sample_idxstats from ch_chrom_length
+  file np_files from ch_combine_clusterpeaks.map { it[1] }.collect()        // map removes the cluster ID.
+  file sample_idxstats from ch_chrom_length.collect()
 
   output:
   file('allclusters_peaks_sorted.bed')
@@ -485,7 +495,7 @@ process cells_masterlist_coverage {
   file(masterbed_sps) from ch_masterbed_sps.collect()
   file sample_chrlen from ch_chrom_length2.collect()
 
-  file(celldef_list) from ch_cellpaths_peakcov
+  file(celldef_list) from ch_cellpaths_masterpeakcov
     .collate(params.cellbatchsize)
     .map { it.join('\n') + '\n' }
 
@@ -504,8 +514,57 @@ process cells_masterlist_coverage {
 }
 
 
+process make_subset_peakmatrix {
 
-process make_peakmatrix {
+  tag "subset-peak-cell-matrix"
+
+  container = 'quay.io/cellgeni/cellclusterer'
+
+  publishDir "${params.outdir}/clus_peak_matrix", mode: 'link'
+
+  when: params.perclusterpeaks
+
+  input:
+  set val(clustag), file(clusmetafile), file(npeakfile) from ch_per_cluster_inputs.join(ch_per_cluster_analysis)
+  file sample_chrlen from ch_chrom_length3.collect()
+
+  output:
+    // file('cell2peak.gz')
+  file('*peaks_bc_matrix.mmtx.gz')
+  file('*bc_peaks_matrix.mmtx.gz')
+  file('*peaks.txt')
+  file('*bc.txt')
+
+  shell:
+  '''
+  cut -f 1-3 !{npeakfile} | sort -k1,1 -k2,2n > clusterpeak.bed
+
+  bedtools sort -faidx !{sample_chrlen} -i clusterpeak.bed > clusterpeak_sps.bed
+          # ^ similar to peaks_makemasterlist; we only need the selection of columns and sorting
+
+
+  while read cellname celldef; do
+    bedtools coverage               \\
+    -a clusterpeak_sps.bed          \\
+    -b $celldef -sorted -header     \\
+    -g !{sample_chrlen} | awk -F"\t" '{if($4>0) print $0}' > $cellname.mp.txt
+
+    echo -e "$cellname\t$cellname.mp.txt" >> peak.inputs
+          # construct this file within-process.
+  done < !{clusmetafile}
+  cut -f 1 peak.inputs > cellnames.txt
+          # idem construct this within-process.
+          # ^ similar to cells_masterlist_coverage 
+
+  ca_peak_matrix.sh -c cellnames.txt -p clusterpeak_sps.bed -i peak.inputs
+          # ^ similar to make_master_peakmatrix
+  '''
+}
+
+// <----------------
+
+
+process make_master_peakmatrix {
 
   tag "peak-cell-matrix"
 
@@ -517,7 +576,7 @@ process make_peakmatrix {
   input:
   file metafile from ch_cellpeak.flatMap { ls -> ls.collect{ it.toString() } }.collectFile(name: 'peak.inputs', newLine: true)
   file('masterpeak.bed') from ch_masterbed_sps2.collect()
-  file('cellnames.txt') from ch_index_names
+  file('cellnames.txt') from ch_index_names.collect()
 
   output:
     // file('cell2peak.gz')

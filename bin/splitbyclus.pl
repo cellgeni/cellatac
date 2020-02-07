@@ -24,8 +24,8 @@ while (<CLADES>) {
 for my $no (sort { $a <=> $b } keys %lists) {
   my $batchfile = "$prefix$no.txt";
   open(OUT, ">$batchfile") || die "no batch file";
-  print OUT map { "$tag2file{$_}\n" } @{$lists{$no}};
-  close(OUT)
+  print OUT map { "$_\t$tag2file{$_}\n" } @{$lists{$no}};
+  close(OUT);
 }
 
 

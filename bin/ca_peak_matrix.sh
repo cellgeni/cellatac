@@ -9,9 +9,10 @@ peakbedfile=
 filelist=
 cellnames=
 force=false
+prefix=
 
 
-while getopts :c:i:p:Fh opt
+while getopts :c:i:p:x:Fh opt
 do
     case "$opt" in
     c)
@@ -23,13 +24,15 @@ do
     p)
       peakbedfile=$OPTARG
       ;;
+    x)
+      prefix=$OPTARG
+      ;;
     F)
       force=true
       ;;
     h)
       cat <<EOU
 -c cell ID file (barcodes usually; one id per line)
--w window file
 -i file with file locations inside, one file per line, full path name
 EOU
       exit
@@ -84,9 +87,18 @@ n_entries=$(tail -n +2 peak2cell.stats | perl -ane '$S+=$F[1]; END{print "$S\n";
  #  Output to matrixmarket format
 #   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-ca_make_mmtx.sh -r peaks.txt -c cells.txt -m peak2cell.mcx -e $n_entries -t integer -o peaks_bc_matrix.mmtx.gz
-ca_make_mmtx.sh -c peaks.txt -r cells.txt -m peak2cell.mcx -e $n_entries -t integer -o bc_peaks_matrix.mmtx.gz -T
+mx_p2c=peaks_bc_matrix.mmtx.gz
+mx_c2p=bc_peaks_matrix.mmtx.gz
+ca_make_mmtx.sh -r peaks.txt -c cells.txt -m peak2cell.mcx -e $n_entries -t integer -o $mx_p2c
+ca_make_mmtx.sh -c peaks.txt -r cells.txt -m peak2cell.mcx -e $n_entries -t integer -T -o $mx_c2p
 # various naming schemes exist. Maybe we'll use bc.
 ln cells.txt bc.txt
+
+if [[ -n $prefix ]]; then
+  ln $mx_p2c $prefix''$mx_p2c
+  ln $mx_c2p $prefix''$mx_c2p
+  ln bc.txt $prefix''bc.txt
+  ln peaks.txt $prefix''peaks.txt
+fi
 
 

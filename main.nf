@@ -417,7 +417,7 @@ process clusters_merge_inputs {
 
   shell:
   '''
-  cat !{clusmetafile} | tr '\\n' '\\0' > clusmetafile0
+  cut -f 2 !{clusmetafile} | tr '\\n' '\\0' > clusmetafile0
   sort -m -k 1,1V -k 2,2n --files0-from=clusmetafile0 | perl -pe 'chomp;$_.="\\t+\\n";' > cluster.!{clustag}.bed
   '''
 }
@@ -530,10 +530,10 @@ process make_subset_peakmatrix {
 
   output:
     // file('cell2peak.gz')
-  file('*peaks_bc_matrix.mmtx.gz')
-  file('*bc_peaks_matrix.mmtx.gz')
-  file('*peaks.txt')
-  file('*bc.txt')
+  file('*.peaks_bc_matrix.mmtx.gz')
+  file('*.bc_peaks_matrix.mmtx.gz')
+  file('*.peaks.txt')
+  file('*.bc.txt')
 
   shell:
   '''
@@ -556,12 +556,11 @@ process make_subset_peakmatrix {
           # idem construct this within-process.
           # ^ similar to cells_masterlist_coverage 
 
-  ca_peak_matrix.sh -c cellnames.txt -p clusterpeak_sps.bed -i peak.inputs
+  ca_peak_matrix.sh -c cellnames.txt -p clusterpeak_sps.bed -i peak.inputs -x "!{clustag}."
           # ^ similar to make_master_peakmatrix
   '''
 }
 
-// <----------------
 
 
 process make_master_peakmatrix {
@@ -591,8 +590,6 @@ process make_master_peakmatrix {
   ca_peak_matrix.sh -c cellnames.txt -p masterpeak.bed -i peak.inputs
   '''
 }
-
-
 
 
 

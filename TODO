@@ -1,46 +1,12 @@
 
-dependencies:
-    seurat, signac dep
-    install.packages("devtools")
-    devtools::install_github("timoast/signac")
-    singularity pull docker://quay.io/cellgeni/cellclustereR
-
-    python multiplet? pip install ...
-      numpy
-      pandas
-      scipy
-
-    samtools
-
-
-
-! user-specified subset of cells
-    input would be i) a list of barcodes (selected because of whatever)
-    and ii) the fragments file (same as in cellATAC). The output would
-    be the peaks_matrix, as in cellATAC. The steps, 1) do macs2
-    considering only the input barcodes, 2) do bed coverage and 3)
-    build matrix
-    (example: zoom e.g.on single or few clusters, consider
-    everything jointly)
-  ->  publish demux data in main pipeline
-  ->  how long does it actually take / how big is the data;
-
-! extract-features/merge-multiplets split pairs; join them?
-
 o integrate multiple experiments
 
-
-- merge-multiplets docopt dep
-
-- publish merge-multiplets images.
+! extract-features/merge-multiplets split pairs; join them?
 
 - bedpe format Ni (three columns) versus more columns; instrumenting macs2 currently with -f AUTO.
   depth available-from-data / presented-to-macs2 / used-by-macs2 ?
 
-
-
 s.a. only clusters based on windows, not on peaks
-
 
 - Perhaps get rid of the bucket structure; it is no longer needed given that we demultiplex
   in the pipeline rather than outside, and given that we divide the cells into batches.

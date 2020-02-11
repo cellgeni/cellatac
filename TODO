@@ -1,4 +1,8 @@
 
+seurat clustering wants singlecell.csv; this does not yet play with multi-samples.
+Can I construct a feasible singlecell.csv myself simply by concatenating?
+
+
 o integrate multiple experiments
 
 ! extract-features/merge-multiplets split pairs; join them?

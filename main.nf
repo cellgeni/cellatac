@@ -23,20 +23,20 @@ params.usecls        =  '__seurat__'
 params.mergepeaks    =  true
 params.perclusterpeaks  =  false
 
-pararms.muxfile      =  null
+params.muxfile      =  null
 
 if ((!params.fragments || !params.cellcsv || !params.posbam) && !params.muxfile) {
   exit 1, "Please supply --fragments <CR-fragment-file> --cellcsv <CR-cellcsv-file> --posbam <CR-posbam-file>"
 }
 
-F_frag = file(params.fragments)
 
 ch_usercls = params.usecls =~ /^__.*__$/ ? Channel.empty() : Channel.fromPath(params.usecls)
 ch_mux     = params.muxfile && !params.mermul ? Channel.fromPath(params.muxfile) : Channel.empty()
 
 
-thecellfile = file(params.cellcsv)
-thebamfile  = file(params.posbam)
+thefragfile = params.fragments ? file(params.fragments) : null
+thecellfile = params.cellcsv   ? file(params.cellcsv)   : null
+thebamfile  = params.posbam    ? file(params.posbam)    : null
 
 
 process prepare_cr {
@@ -45,7 +45,7 @@ process prepare_cr {
 
   publishDir "${params.outdir}", pattern: 'cellmetadata',   mode: 'copy'
 
-  when: !params.mermul
+  when: !params.mermul && !params.muxfile
 
   input:
   set file(f_cells), file(posbam) from Channel.from([[thecellfile, thebamfile]])
@@ -91,6 +91,8 @@ process prepare_cr {
 process prepare_cr_mux {     // integrate multiple fragment files
 
   tag "cr-mux-prep $cellbatchsize"
+
+  when: !params.mermul && !params.posbam
 
   publishDir "${params.outdir}", pattern: 'cellmetadata',   mode: 'copy'
 
@@ -162,7 +164,7 @@ process prepare_mm {        // merge multiplets
 
   publishDir "${params.outdir}", pattern: 'cellmetadata_mm',   mode: 'copy'
 
-  when: params.mermul
+  when: params.mermul && !params.muxfile
 
   input:
   set file(f_cells), file(posbam) from Channel.from([[thecellfile, thebamfile]])
@@ -237,17 +239,17 @@ process join_celltabs {
 
   ch_celltab_manymerged_cr
     .mix(ch_celltab_cr, ch_celltab_mm)
-    .into { ch_celltab; ch_celltab2, ch_celltab3 }
+    .into { ch_celltab; ch_celltab2; ch_celltab3 }
 
   ch_wintab_many_cr.first()
     .mix(ch_wintab_cr, ch_wintab_mm)
-    .set { ch_wintab; ch_wintab2 }
+    .into { ch_wintab; ch_wintab2 }
 
   ch_chrom_length_many_cr.first()
     .mix(ch_chrom_length_cr, ch_chrom_length_mm)
     .into { ch_chrom_length; ch_chrom_length2; ch_chrom_length3 }
 
-  ch_demux_cr.map { [ "cr", F_frag, it ] }
+  ch_demux_cr.map { [ "cr", thefragfile, it ] }
     .mix(ch_demux_mm, ch_demux_many_cr)
     .transpose()
     .set { ch_demux_batch }

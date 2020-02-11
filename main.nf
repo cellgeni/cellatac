@@ -23,7 +23,7 @@ params.usecls        =  '__seurat__'
 params.mergepeaks    =  true
 params.perclusterpeaks  =  false
 
-params.muxfile      =  null
+params.muxfile       =  null
 
 if ((!params.fragments || !params.cellcsv || !params.posbam) && !params.muxfile) {
   exit 1, "Please supply --fragments <CR-fragment-file> --cellcsv <CR-cellcsv-file> --posbam <CR-posbam-file>"
@@ -34,9 +34,18 @@ ch_usercls = params.usecls =~ /^__.*__$/ ? Channel.empty() : Channel.fromPath(pa
 ch_mux     = params.muxfile && !params.mermul ? Channel.fromPath(params.muxfile) : Channel.empty()
 
 
+ch_cellfile = params.cellcsv    ? Channel.From(params.cellcsv)   : Channel.empty()
+ch_fragfile_cr = params.fragments  ? Channel.From(params.fragments) : Channel.empty()
+ch_bamfile  = params.posbam     ? Channel.From(params.posbam)    : Channel.empty()
+
+ch_cellfile.into { ch_cellfile_mm; ch_cellfile_cr; ch_cellfile_seurat }
+ch_bamfile.into  { ch_bamfile_mm; ch_bamfile_cr }
+
+/*
 thefragfile = params.fragments ? file(params.fragments) : null
 thecellfile = params.cellcsv   ? file(params.cellcsv)   : null
 thebamfile  = params.posbam    ? file(params.posbam)    : null
+*/
 
 
 process prepare_cr {
@@ -48,7 +57,8 @@ process prepare_cr {
   when: !params.mermul && !params.muxfile
 
   input:
-  set file(f_cells), file(posbam) from Channel.from([[thecellfile, thebamfile]])
+  file(f_cells) from ch_cellfile_cr.collect()
+  file(posbam) from ch_bamfile_cr.collect()
   val cellbatchsize from params.cellbatchsize
   val winsize from params.winsize
 
@@ -56,7 +66,7 @@ process prepare_cr {
   file('cellmetadata/cells.tab')    into ch_celltab_cr
   file('cellmetadata/win.tab')      into ch_wintab_cr
   file('cellmetadata/sample.chrlen')    into ch_chrom_length_cr
-  file('c_c.*') into ch_demux_cr
+  set val("cr"), file('c_c.*') into ch_demux_cr
 
   shell:
   filter = params.ncell > 0 ? "head -n ${params.ncell}" : "cat"
@@ -90,7 +100,7 @@ process prepare_cr {
 
 process prepare_cr_mux {     // integrate multiple fragment files
 
-  tag "cr-mux-prep $cellbatchsize"
+  tag "cr-mux-prep $sampleid $sampletag"
 
   when: !params.mermul && !params.posbam
 
@@ -103,21 +113,11 @@ process prepare_cr_mux {     // integrate multiple fragment files
   val cellbatchsize from params.cellbatchsize
   val winsize from params.winsize
 
-                // Output:
-                // cells.tab merge sample tabs into global tab (downstream mux_merge)
-                // cells.names same as above;
-                // cellmetadata will be produced in mux_merge process
-                // OTOH cellmetadata only contains two files that are used? check.
-                //       cells.tab and win.tab
-
-                // win.tab   same for all; should be made in juxtaposed process
-                // sample.chrlen same as above
-
-
   output:
-  file('cellmetadata/cells.names')   into ch_cellnames_many_cr
+  file("cellmetadata/${sampleid}.names")   into ch_cellnames_many_cr
   file('cellmetadata/sample.chrlen') into ch_chrom_length_many_cr
   file('cellmetadata/win.tab')       into ch_wintab_many_cr
+  file('cellmetadata/*.info')        into ch_cellinfo_many_cr
   set val(sampletag), file("*.fragments.gz"), file('c_c.*') into ch_demux_many_cr
 
   shell:
@@ -125,7 +125,7 @@ process prepare_cr_mux {     // integrate multiple fragment files
   '''
 # make fragments, bam, manifest available
   bamfile=!{sampleid}.bam
-  fragfile=!{sampleid}.fragments.gz               // output; not used below
+  fragfile=!{sampleid}.fragments.gz               # output; not used below
   cellfile=!{sampleid}.singlecell.csv
 
   ln -s !{root}/possorted_bam.bam $bamfile
@@ -142,13 +142,13 @@ process prepare_cr_mux {     // integrate multiple fragment files
 
 # Names + info of selected cells.
   perl -F, -ane 's/,/\t/g; print if $F[9] == 1' $cellfile \\
-     | (sort -rnk 2 || true) | !{filter} > cellmetadata/chosen_cells.info
+     | (sort -rnk 2 || true) | !{filter} > cellmetadata/!{sampleid}.info
 
 # Just the names of selected cells. 
-  cut -f 1 cellmetadata/chosen_cells.info | sort > cellmetadata/cells.names
+  cut -f 1 cellmetadata/!{sampleid}.info | sort > cellmetadata/!{sampleid}.names
 
 # Batch lists for demuxing
-  split -l !{cellbatchsize} cellmetadata/cells.names c_c.
+  split -l !{cellbatchsize} cellmetadata/!{sampleid}.names c_c.
 
 # Tab file for windows
   ca_make_chromtab.pl !{winsize} cellmetadata/sample.chrlen > cellmetadata/win.tab
@@ -167,7 +167,8 @@ process prepare_mm {        // merge multiplets
   when: params.mermul && !params.muxfile
 
   input:
-  set file(f_cells), file(posbam) from Channel.from([[thecellfile, thebamfile]])
+  file(f_cells) from ch_cellfile_mm.collect()
+  file(posbam) from ch_bamfile_mm.collect()
   val cellbatchsize from params.cellbatchsize
   val winsize from params.winsize
 
@@ -214,16 +215,25 @@ process prepare_mm {        // merge multiplets
 }
 
 
-process join_celltabs {
+process join_muxfiles {
 
-  input: file('?.txt') from ch_cellnames_many_cr.collect()
+  input:
+  file('?.txt') from ch_cellnames_many_cr.collect()
+  file(fninfo) from ch_cellinfo_many_cr.collect()
 
-  output: file('merged.tab') into ch_celltab_manymerged_cr
+  output:
+  file('merged.tab') into ch_celltab_manymerged_cr
+  file('singlecell.csv') into ch_singlecellcsv
 
   shell:
   '''
   cat ?.txt > merged.names
   nl -v0 -nln -w1 < merged.names > merged.tab
+
+  echo 'barcode,total,duplicate,chimeric,unmapped,lowmapq,mitochondrial,passed_filters,cell_id,is__cell_barcode' > singlecell.csv
+  for f in !{fninfo}; do
+    tail -n +2 $f >> singlecell.csv
+  done
   '''
 }
 
@@ -249,7 +259,8 @@ process join_celltabs {
     .mix(ch_chrom_length_cr, ch_chrom_length_mm)
     .into { ch_chrom_length; ch_chrom_length2; ch_chrom_length3 }
 
-  ch_demux_cr.map { [ "cr", thefragfile, it ] }
+  ch_fragfile_cr.map { fragf -> [ "cr", fragf ] }
+    .join(ch_demux_cr)
     .mix(ch_demux_mm, ch_demux_many_cr)
     .transpose()
     .set { ch_demux_batch }
@@ -257,21 +268,24 @@ process join_celltabs {
 
 process sample_demux {
 
-  tag "$batchtag"
+  tag "sample-$sampletag batch-$batchtag"
 
   input:
   set val(sampletag), file(frags), file(cells) from ch_demux_batch
 
   output:
-  file('celldata/[ACGT][ACGT][ACGT][ACGT]/*.bed') into ch_demuxed
-  file('celldata/mtx*.edges') into ch_matrix
+  file('*celldata/[ACGT][ACGT][ACGT][ACGT]/*.bed') into ch_demuxed
+  file('*celldata/mtx*.edges') into ch_matrix
 
   shell:
   batchtag = cells.toString() - 'c_c.'
   '''
-  dir=!{sampletag}-celldata
+  dir=celldata
+  if [[ -n "!{sampletag}" ]]; then
+    dir=!{sampletag}-celldata
+  fi
   mkdir -p $dir
-  zcat !{frags} | samdemux.pl --barcodefile=!{cells} --outdir=$dir --bucket --fragments --ntest=0 --fnedges=mtx.!{thetag}.edges --tag=!{sampletag}
+  zcat !{frags} | samdemux.pl --barcodefile=!{cells} --outdir=$dir --bucket --fragments --ntest=0 --fnedges=mtx.!{sampletag}.edges --tag=!{sampletag}
   '''
 }
 
@@ -399,7 +413,7 @@ process seurat_clustering {
   val nclades   from  params.nclades
   val sampleid  from  params.sampleid
   val npcs      from  params.npcs
-  file('singlecell.csv') from thecellfile
+  file('singlecell.csv') from ch_cellfile_seurat.collect()
   file('inputs') from ch_load_mmtx2
 
   output:

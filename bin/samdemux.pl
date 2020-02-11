@@ -167,6 +167,7 @@ while (<>) {
 
   if ($do_psb && m{\tCB:Z:(\S+)\b}) {
     $bc = $1;
+    die "fix insertion of sampletag similar to fragments mode";
   }
   elsif ($do_fragments) {
     my @F = split("\t");
@@ -177,6 +178,10 @@ while (<>) {
                         # todo? read tab file to check region code exists.
     $region_code = $chr . '_' . $index;
     $bc = $mybc;
+    if ($sampletag) {
+      my $printbc = "$sampletag-$bc";
+      s/\t$bc/\t$printbc/;
+    }
   }
   else {
     $n_no_psb_match++;
@@ -195,8 +200,8 @@ while (<>) {
     @entries = ();
   }
 
-  if (++$count{$printbc} >= $SIZE) {
-    flush_lines($printbc, $count{$printbc});
+  if (++$count{$bc} >= $SIZE) {
+    flush_lines($bc, $count{$bc});
   }
 
   if ($N_READ % 10000 == 0) {             # 100 dots per line, each dot 10,000 reads.

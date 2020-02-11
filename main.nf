@@ -23,20 +23,22 @@ params.usecls        =  '__seurat__'
 params.mergepeaks    =  true
 params.perclusterpeaks  =  false
 
+pararms.muxfile      =  null
 
-if (!params.fragments || !params.cellcsv || !params.posbam) {
+if ((!params.fragments || !params.cellcsv || !params.posbam) && !params.muxfile) {
   exit 1, "Please supply --fragments <CR-fragment-file> --cellcsv <CR-cellcsv-file> --posbam <CR-posbam-file>"
 }
 
+F_frag = file(params.fragments)
 
-ch_fragments_cr = params.mermul ? Channel.empty() : Channel.fromPath(params.fragments)
 ch_usercls = params.usecls =~ /^__.*__$/ ? Channel.empty() : Channel.fromPath(params.usecls)
+ch_mux     = params.muxfile && !params.mermul ? Channel.fromPath(params.muxfile) : Channel.empty()
+
 
 thecellfile = file(params.cellcsv)
 thebamfile  = file(params.posbam)
 
 
-      // fixme noteme stick idxstats in here if needed
 process prepare_cr {
 
   tag "cr-prep $cellbatchsize"
@@ -53,10 +55,8 @@ process prepare_cr {
   output:
   file('cellmetadata/cells.tab')    into ch_celltab_cr
   file('cellmetadata/win.tab')      into ch_wintab_cr
-  file('cellmetadata/cells.names')  into ch_index_names_cr
-  file('cellmetadata')              into ch_metadata_cr
   file('cellmetadata/sample.chrlen')    into ch_chrom_length_cr
-  file('c_c.*') into ch_demux_batch_cr
+  file('c_c.*') into ch_demux_cr
 
   shell:
   filter = params.ncell > 0 ? "head -n ${params.ncell}" : "cat"
@@ -88,6 +88,72 @@ process prepare_cr {
 }
 
 
+process prepare_cr_mux {     // integrate multiple fragment files
+
+  tag "cr-mux-prep $cellbatchsize"
+
+  publishDir "${params.outdir}", pattern: 'cellmetadata',   mode: 'copy'
+
+  input:
+  set val(sampletag), val(sampleid), val(root) from ch_mux
+        .splitCsv(sep: '\t')
+        .view()
+  val cellbatchsize from params.cellbatchsize
+  val winsize from params.winsize
+
+                // Output:
+                // cells.tab merge sample tabs into global tab (downstream mux_merge)
+                // cells.names same as above;
+                // cellmetadata will be produced in mux_merge process
+                // OTOH cellmetadata only contains two files that are used? check.
+                //       cells.tab and win.tab
+
+                // win.tab   same for all; should be made in juxtaposed process
+                // sample.chrlen same as above
+
+
+  output:
+  file('cellmetadata/cells.names')   into ch_cellnames_many_cr
+  file('cellmetadata/sample.chrlen') into ch_chrom_length_many_cr
+  file('cellmetadata/win.tab')       into ch_wintab_many_cr
+  set val(sampletag), file("*.fragments.gz"), file('c_c.*') into ch_demux_many_cr
+
+  shell:
+  filter = params.ncell > 0 ? "head -n ${params.ncell}" : "cat"
+  '''
+# make fragments, bam, manifest available
+  bamfile=!{sampleid}.bam
+  fragfile=!{sampleid}.fragments.gz               // output; not used below
+  cellfile=!{sampleid}.singlecell.csv
+
+  ln -s !{root}/possorted_bam.bam $bamfile
+  ln -s !{root}/fragments.tsv.gz $fragfile
+  ln -s !{root}/singlecell.csv $cellfile
+
+  mkdir -p cellmetadata
+# Chrosome length file.
+  samtools view -H $bamfile  \\
+    | grep '@SQ'$'\\t''SN:'    \\
+    | perl -ne '/\\bSN:(\\S+)/ && ($name=$1); /\\bLN:(\\d+)/ && ($len=$1); print "$name\\t$len\\n";' \\
+    | uniq                    \\
+    > cellmetadata/sample.chrlen
+
+# Names + info of selected cells.
+  perl -F, -ane 's/,/\t/g; print if $F[9] == 1' $cellfile \\
+     | (sort -rnk 2 || true) | !{filter} > cellmetadata/chosen_cells.info
+
+# Just the names of selected cells. 
+  cut -f 1 cellmetadata/chosen_cells.info | sort > cellmetadata/cells.names
+
+# Batch lists for demuxing
+  split -l !{cellbatchsize} cellmetadata/cells.names c_c.
+
+# Tab file for windows
+  ca_make_chromtab.pl !{winsize} cellmetadata/sample.chrlen > cellmetadata/win.tab
+  '''
+}
+
+
 process prepare_mm {        // merge multiplets
 
   tag "mm-prep $cellbatchsize"
@@ -106,12 +172,9 @@ process prepare_mm {        // merge multiplets
   output:
   file('cellmetadata/cells.tab')    into ch_celltab_mm
   file('cellmetadata/win.tab')      into ch_wintab_mm
-  file('cellmetadata/cells.names')  into ch_index_names_mm
-  file('cellmetadata')              into ch_metadata_mm
   file('cellmetadata/sample.chrlen')    into ch_chrom_length_mm
-  file('c_c.*') into ch_demux_batch_mm
 
-  file('fragmints2.tsv.gz')         into ch_fragments_mm
+  set val("mm"), file('fragmints2.tsv.gz'), file('c_c.*') into ch_demux_mm
 
   shell:
   '''
@@ -149,53 +212,74 @@ process prepare_mm {        // merge multiplets
 }
 
 
-// The merge-multiplet code was inserted in a clone of the preparation process.
-// below are all the merging Y-junctions for plumbing the channels to the same destination.
+process join_celltabs {
 
-  ch_celltab_cr.mix(ch_celltab_mm).set { ch_celltab }
-  ch_wintab_cr.mix(ch_wintab_mm).set { ch_wintab }
-  ch_index_names_cr.mix(ch_index_names_mm).set { ch_index_names }
-  ch_metadata_cr.mix(ch_metadata_mm).set { ch_metadata }
+  input: file('?.txt') from ch_cellnames_many_cr.collect()
 
-  ch_chrom_length_cr.mix(ch_chrom_length_mm).into { ch_chrom_length; ch_chrom_length2; ch_chrom_length3 }
-
-  ch_demux_batch_cr.mix(ch_demux_batch_mm).set { ch_demux_batch }
-
-  ch_fragments_cr.mix(ch_fragments_mm).set { ch_fragments }
-
-
-/* The demux part does a complicated thing with buckets.
-   This is a remnant from a time when everything was published in a bucket structure first.
-   It will probably be removed.
-*/
-
-process demux {
-
-  tag "$thetag"
-
-  input:
-  file cells from ch_demux_batch.flatten()
-  file frags from ch_fragments.collect()
-
-  output:
-  file('celldata/[ACGT][ACGT][ACGT][ACGT]/*.bed') into ch_demuxed
-  // file('*.list')  into ch_index
-  file('celldata/mtx*.edges') into ch_matrix
+  output: file('merged.tab') into ch_celltab_manymerged_cr
 
   shell:
-  thetag = cells.toString() - 'c_c.'
   '''
-  mkdir -p celldata
-  zcat !{frags} | samdemux.pl --barcodefile=!{cells} --outdir=celldata --bucket --fragments --ntest=0 --fnedges=mtx.!{thetag}.edges
-  # find celldata -name '*.bed' > !{thetag}.list
+  cat ?.txt > merged.names
+  nl -v0 -nln -w1 < merged.names > merged.tab
   '''
 }
 
 
+/*
+   The merge-multiplet code was inserted in a clone of the preparation process.
+   below are all the merging Y-junctions for plumbing the channels to the same destination.
+   For further excitement, we also cater for merging multiple 10x experiments.
+      prepare_cr      -  pure cr code
+      prepare_mm      -  multiplet merging code
+      prepare_many_cr -  cr code supporting multiple experiments (not yet multipletted)
+*/
+
+  ch_celltab_manymerged_cr
+    .mix(ch_celltab_cr, ch_celltab_mm)
+    .into { ch_celltab; ch_celltab2, ch_celltab3 }
+
+  ch_wintab_many_cr.first()
+    .mix(ch_wintab_cr, ch_wintab_mm)
+    .set { ch_wintab; ch_wintab2 }
+
+  ch_chrom_length_many_cr.first()
+    .mix(ch_chrom_length_cr, ch_chrom_length_mm)
+    .into { ch_chrom_length; ch_chrom_length2; ch_chrom_length3 }
+
+  ch_demux_cr.map { [ "cr", F_frag, it ] }
+    .mix(ch_demux_mm, ch_demux_many_cr)
+    .transpose()
+    .set { ch_demux_batch }
+
+
+process demux {
+
+  tag "$batchtag"
+
+  input:
+  set val(sampletag), file(frags), file(cells) from ch_demux_batch
+
+  output:
+  file('celldata/[ACGT][ACGT][ACGT][ACGT]/*.bed') into ch_demuxed
+  file('celldata/mtx*.edges') into ch_matrix
+
+  shell:
+  batchtag = cells.toString() - 'c_c.'
+  '''
+  dir=!{sampletag}-celldata
+  mkdir -p $dir
+  zcat !{frags} | samdemux.pl --barcodefile=!{cells} --outdir=$dir --bucket --fragments --ntest=0 --fnedges=mtx.!{thetag}.edges --tag=!{sampletag}
+  '''
+}
+
+
+                  // fixme noteme; this depends on bed suffix;
+                  // does samdemux outputs sam suffix in possorted bam mode.
 ch_demuxed
   .flatMap()
   .map { it -> it.toString() - ~/.*celldata\/[ACGT]{4}\// - ~/\.bed/ + '\t' + it.toString()  }
-  .into { ch_cellpaths_clusterindex; ch_cellpaths_masterpeakcov; ch_cellpaths_clustercov }
+  .into { ch_cellpaths_clusterindex; ch_cellpaths_masterpeakcov }
   
 
 process make_big_matrix {
@@ -263,7 +347,9 @@ process filter_big_matrix {
   when: true
 
   input:
-  file('cellmetadata') from ch_metadata
+  file('cell.tab') from ch_celltab2
+  file('win.tab') from ch_wintab2
+
   file('cell2win.mcx') from ch_cell2win
   val ntfs      from  params.ntfs
 
@@ -278,9 +364,9 @@ process filter_big_matrix {
   mkdir outputs
   mkdir other_publish
   cd matrix
-  ca_top_region.sh \\
-      -c ../cellmetadata/cells.tab    \\
-      -w ../cellmetadata/win.tab      \\
+  ca_top_region.sh            \\
+      -c ../cells.tab         \\
+      -w ../win.tab           \\
       -m ../cell2win.mcx              \\
       -n !{ntfs}                      \\
       -C ../outputs/filtered_cell.stats          \\
@@ -575,7 +661,7 @@ process make_master_peakmatrix {
   input:
   file metafile from ch_cellpeak.flatMap { ls -> ls.collect{ it.toString() } }.collectFile(name: 'peak.inputs', newLine: true)
   file('masterpeak.bed') from ch_masterbed_sps2.collect()
-  file('cellnames.txt') from ch_index_names.collect()
+  file('cells.tab') from ch_celltab3.collect()
 
   output:
     // file('cell2peak.gz')
@@ -586,6 +672,7 @@ process make_master_peakmatrix {
 
   shell:
   '''
+  cut -f 2 cells.tab > cellnames.txt
                   # fixme: hardcoded output names.
   ca_peak_matrix.sh -c cellnames.txt -p masterpeak.bed -i peak.inputs
   '''

@@ -42,6 +42,7 @@ my $do_psb       = 1;
 my $n_no_psb_match = 0;
 my $winsize = 5000;
 my $fnedges = undef;
+my $sampletag = "";
 
 
 sub help {
@@ -56,6 +57,7 @@ Options:
 --bucket                distribute the files across directory buckets
 --fragments             demux the 10x ATAC fragments file rather than the possorted bam file
 --fnedges               output file name for edges (output in --fragments mode)
+--tag=<string>          prepend <string> to barcdoes (for merging different fragment files)
 EOH
 }
 
@@ -70,6 +72,7 @@ if
    ,  "bucket"          =>   \$bucket
    ,  "fragments"       =>   \$do_fragments
    ,  "winsize=i"       =>   \$winsize
+   ,  "tag=s"           =>   \$sampletag
    )
 )
    {  print STDERR "option processing failed\n";
@@ -183,16 +186,17 @@ while (<>) {
   my $cache = $cache{$bc} || next;           # ignore filtered barcodes.
   $N_READ++;
 
+  my $printbc = $sampletag ? "$sampletag-$bc" : $bc;
   push @$cache, $_;
-  push @entries, "$bc\t$region_code\n" if $do_fragments;
+  push @entries, "$printbc\t$region_code\n" if $do_fragments;
 
   if (@entries > 500000) {
     print MTX_ENTRIES @entries;
     @entries = ();
   }
 
-  if (++$count{$bc} >= $SIZE) {
-    flush_lines($bc, $count{$bc});
+  if (++$count{$printbc} >= $SIZE) {
+    flush_lines($printbc, $count{$printbc});
   }
 
   if ($N_READ % 10000 == 0) {             # 100 dots per line, each dot 10,000 reads.

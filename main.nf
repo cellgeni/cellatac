@@ -145,7 +145,7 @@ process prepare_cr_mux {     // integrate multiple fragment files
      | (sort -rnk 2 || true) | !{filter} > cellmetadata/!{sampleid}.info
 
 # Just the names of selected cells. 
-  cut -f 1 cellmetadata/!{sampleid}.info | sort > cellmetadata/!{sampleid}.names
+  cut -f 1 cellmetadata/!{sampleid}.info | sort | perl -pe 's/^/!{sampletag}\\t/' > cellmetadata/!{sampleid}.names
 
 # Batch lists for demuxing
   split -l !{cellbatchsize} cellmetadata/!{sampleid}.names c_c.
@@ -285,7 +285,7 @@ process sample_demux {
     dir=!{sampletag}-celldata
   fi
   mkdir -p $dir
-  zcat !{frags} | samdemux.pl --barcodefile=!{cells} --outdir=$dir --bucket --fragments --ntest=0 --fnedges=mtx.!{sampletag}.edges --tag=!{sampletag}
+  zcat !{frags} | samdemux.pl --barcodefile=!{cells} --outdir=$dir --bucket --fragments --ntest=0 --fnedges=mtx.!{sampletag}-!{batchtag}.edges --tag=!{sampletag}
   '''
 }
 
@@ -363,7 +363,7 @@ process filter_big_matrix {
   when: true
 
   input:
-  file('cell.tab') from ch_celltab2
+  file('cells.tab') from ch_celltab2
   file('win.tab') from ch_wintab2
 
   file('cell2win.mcx') from ch_cell2win

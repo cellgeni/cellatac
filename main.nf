@@ -145,7 +145,7 @@ process prepare_cr_mux {     // integrate multiple fragment files
      | (sort -rnk 2 || true) | !{filter} > cellmetadata/!{sampleid}.info
 
 # Just the names of selected cells. 
-  cut -f 1 cellmetadata/!{sampleid}.info | sort | perl -pe 's/^/!{sampletag}\\t/' > cellmetadata/!{sampleid}.names
+  cut -f 1 cellmetadata/!{sampleid}.info | sort | perl -pe 's/^/!{sampletag}-/' > cellmetadata/!{sampleid}.names
 
 # Batch lists for demuxing
   split -l !{cellbatchsize} cellmetadata/!{sampleid}.names c_c.
@@ -240,8 +240,8 @@ process join_muxfiles {
 
 /*
    The merge-multiplet code was inserted in a clone of the preparation process.
-   below are all the merging Y-junctions for plumbing the channels to the same destination.
    For further excitement, we also cater for merging multiple 10x experiments.
+   below are all the merging Y-junctions for plumbing the channels to the same destination.
       prepare_cr      -  pure cr code
       prepare_mm      -  multiplet merging code
       prepare_cr_mux  -  cr code supporting multiple experiments (not yet multipletted)
@@ -315,7 +315,8 @@ process make_big_matrix {
 
   shell:
   '''
-  cat !{all_edges} | mcxload --stream-split -abc - -strict-tabc !{celltab} -strict-tabr !{wintab} --write-binary -o cell2win.mcx
+  # cat !{all_edges} | mcxload --stream-split -abc - -strict-tabc !{celltab} -strict-tabr !{wintab} --write-binary -o cell2win.mcx
+  cat !{all_edges} | mcxload --stream-split -abc - -strict-tabc !{celltab} -strict-tabr !{wintab} -o cell2win.mcx
   sleep 3
   '''
 }

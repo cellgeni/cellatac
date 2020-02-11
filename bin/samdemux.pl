@@ -188,10 +188,10 @@ while (<>) {
     next;
   }
 
-  my $cache = $cache{$bc} || next;           # ignore filtered barcodes.
+  my $printbc = $sampletag ? "$sampletag-$bc" : $bc;
+  my $cache = $cache{$printbc} || next;           # ignore filtered barcodes.
   $N_READ++;
 
-  my $printbc = $sampletag ? "$sampletag-$bc" : $bc;
   push @$cache, $_;
   push @entries, "$printbc\t$region_code\n" if $do_fragments;
 
@@ -200,8 +200,8 @@ while (<>) {
     @entries = ();
   }
 
-  if (++$count{$bc} >= $SIZE) {
-    flush_lines($bc, $count{$bc});
+  if (++$count{$printbc} >= $SIZE) {
+    flush_lines($printbc, $count{$printbc});
   }
 
   if ($N_READ % 10000 == 0) {             # 100 dots per line, each dot 10,000 reads.

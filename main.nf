@@ -232,7 +232,7 @@ process join_celltabs {
    For further excitement, we also cater for merging multiple 10x experiments.
       prepare_cr      -  pure cr code
       prepare_mm      -  multiplet merging code
-      prepare_many_cr -  cr code supporting multiple experiments (not yet multipletted)
+      prepare_cr_mux  -  cr code supporting multiple experiments (not yet multipletted)
 */
 
   ch_celltab_manymerged_cr
@@ -253,7 +253,7 @@ process join_celltabs {
     .set { ch_demux_batch }
 
 
-process demux {
+process sample_demux {
 
   tag "$batchtag"
 

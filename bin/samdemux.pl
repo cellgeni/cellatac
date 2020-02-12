@@ -95,6 +95,7 @@ if ($do_fragments) {
 
 sub tag_barcode {
   my $bc = shift;
+  $bc =~ s/^(\d+)-//;
   my $tag = join "", (split "", $bc)[2,4,6,8];
   if (length($tag) != 4 || $tag !~ /^[ACGT]{4}$/) {
     die "Weird tag [$tag] for barcode [$bc]";

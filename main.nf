@@ -218,7 +218,7 @@ process prepare_mm {        // merge multiplets
 process join_muxfiles {
 
   input:
-  file('?.txt') from ch_cellnames_many_cr.collect()
+  file('???.names.txt') from ch_cellnames_many_cr.collect()
   file(fninfo) from ch_cellinfo_many_cr.collect()
 
   output:
@@ -227,7 +227,7 @@ process join_muxfiles {
 
   shell:
   '''
-  cat ?.txt > merged.names
+  cat *.names.txt > merged.names
   nl -v0 -nln -w1 < merged.names > merged.tab
 
   echo 'barcode,total,duplicate,chimeric,unmapped,lowmapq,mitochondrial,passed_filters,cell_id,is__cell_barcode' > singlecell.csv
@@ -631,13 +631,18 @@ process make_subset_peakmatrix {
 
   output:
     // file('cell2peak.gz')
-  file('*.peaks_bc_matrix.mmtx.gz')
-  file('*.bc_peaks_matrix.mmtx.gz')
-  file('*.peaks.txt')
-  file('*.bc.txt')
+  file('*.peaks_bc_matrix.mmtx.gz') optional true
+  file('*.bc_peaks_matrix.mmtx.gz') optional true
+  file('*.peaks.txt') optional true
+  file('*.bc.txt') optional true
+  file('*.macs2-empty') optional true
 
   shell:
   '''
+  if [[ ! -s !{npeakfile} ]]; then
+    > !{clustag}.macs2-empty
+    exit 0
+  fi
   cut -f 1-3 !{npeakfile} | sort -k1,1 -k2,2n > clusterpeak.bed
 
   bedtools sort -faidx !{sample_chrlen} -i clusterpeak.bed > clusterpeak_sps.bed

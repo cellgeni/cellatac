@@ -1,37 +1,35 @@
 
+! option to feed Seurat the unfiltered matrix.
+  -> keep option to feed filtered matrix; pre-reducing the data.
+
+! mermul on multiple experiments; run a mode where it publishes in the CR directory,
+  and NF takes it from there?
+
+! mermul output paired regions rather than read regions (extract-features/merge-multiplets)
+
+c transpose of c_c batches is slighly subtle code. check / view()
 c self-constructed singlecell.csv given to seurat for multisample.
-c test plain cr and mm modes
-c test per-cluster matrices, they failed at some point
-   -> low cluster size perhaps; have to catch this in macs2 process
-   and make outputs optional (check empty peak file) + some reporting.
-- better names in publishing, e.g. 'seurat'.
+c test plain cr and mm modes (look at clustering pdf)
+- better names in publishing, e.g. 'seurat' to tag clustering. For now, change outdir.
+d produce mmtx format in mcxdump internally
+c everything on the + strand (see plusstrand below)
 
-o integrate multiple experiments
+- use datamash again.
 
-! extract-features/merge-multiplets split pairs; join them?
 
 - bedpe format Ni (three columns) versus more columns; instrumenting macs2 currently with -f AUTO.
   depth available-from-data / presented-to-macs2 / used-by-macs2 ?
-
-s.a. only clusters based on windows, not on peaks
 
 - Perhaps get rid of the bucket structure; it is no longer needed given that we demultiplex
   in the pipeline rather than outside, and given that we divide the cells into batches.
   However, it works and might become useful if the number of cells grow very large; we
   keep it for now.
 
-- check
+- plusstrand
   clusters_makebam_P4
   We make bed file for macs2 where all features are on the positive strand.
   Any issue with this?
   Test whether macs2 picks up depth. Maybe ask even.
-
-- devel
-  when combining multiple samples, they need to use the same regions.
-  Currently regions are derived from samtools view -H on the possorted bam file.
-
-- devel
-  produce mmtx format in mcxdump internally
 
 - potentially streaming etc format is a wee bit faster. Very low priority.
 

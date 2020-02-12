@@ -141,11 +141,11 @@ process prepare_cr_mux {     // integrate multiple fragment files
     > cellmetadata/sample.chrlen
 
 # Names + info of selected cells.
-  perl -F, -ane 's/,/\t/g; print if $F[9] == 1' $cellfile \\
+  perl -F, -ane 's/,/\t/g; print "!{sampletag}-$_" if $F[9] == 1' $cellfile \\
      | (sort -rnk 2 || true) | !{filter} > cellmetadata/!{sampleid}.info
 
 # Just the names of selected cells. 
-  cut -f 1 cellmetadata/!{sampleid}.info | sort | perl -pe 's/^/!{sampletag}-/' > cellmetadata/!{sampleid}.names
+  cut -f 1 cellmetadata/!{sampleid}.info | sort > cellmetadata/!{sampleid}.names
 
 # Batch lists for demuxing
   split -l !{cellbatchsize} cellmetadata/!{sampleid}.names c_c.
@@ -231,9 +231,7 @@ process join_muxfiles {
   nl -v0 -nln -w1 < merged.names > merged.tab
 
   echo 'barcode,total,duplicate,chimeric,unmapped,lowmapq,mitochondrial,passed_filters,cell_id,is__cell_barcode' > singlecell.csv
-  for f in !{fninfo}; do
-    tail -n +2 $f >> singlecell.csv
-  done
+  cat !{fninfo} >> singlecell.csv
   '''
 }
 
@@ -414,7 +412,7 @@ process seurat_clustering {
   val nclades   from  params.nclades
   val sampleid  from  params.sampleid
   val npcs      from  params.npcs
-  file('singlecell.csv') from ch_cellfile_seurat.collect()
+  file('singlecell.csv') from ch_cellfile_seurat.mix(ch_singlecellcsv).collect()
   file('inputs') from ch_load_mmtx2
 
   output:

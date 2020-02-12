@@ -1,7 +1,10 @@
 
-seurat clustering wants singlecell.csv; this does not yet play with multi-samples.
-Can I construct a feasible singlecell.csv myself simply by concatenating?
-
+c self-constructed singlecell.csv given to seurat for multisample.
+c test plain cr and mm modes
+c test per-cluster matrices, they failed at some point
+   -> low cluster size perhaps; have to catch this in macs2 process
+   and make outputs optional (check empty peak file) + some reporting.
+- better names in publishing, e.g. 'seurat'.
 
 o integrate multiple experiments
 

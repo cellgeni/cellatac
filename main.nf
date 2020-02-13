@@ -305,7 +305,7 @@ process make_big_matrix {
   publishDir "${params.outdir}/cellmetadata", mode: 'link', pattern: 'cell2win.mcx'
 
   input:
-  file all_edges from ch_matrix.collect()
+  file all_edges from ch_matrix.toSortedList()
   file celltab from ch_celltab
   file wintab  from ch_wintab
 
@@ -564,7 +564,7 @@ process peaks_makemasterlist {
   when: params.mergepeaks
 
   input:
-  file np_files from ch_combine_clusterpeaks.map { it[1] }.collect()        // map removes the cluster ID.
+  file np_files from ch_combine_clusterpeaks.map { it[1] }.toSortedList()        // map removes the cluster ID.
   file sample_idxstats from ch_chrom_length.collect()
 
   output:
@@ -598,6 +598,8 @@ process cells_masterlist_coverage {
   file sample_chrlen from ch_chrom_length2.collect()
 
   file(celldef_list) from ch_cellpaths_masterpeakcov
+    .toSortedList()
+    .flatMap()
     .collate(params.cellbatchsize)
     .map { it.join('\n') + '\n' }
 

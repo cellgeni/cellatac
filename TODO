@@ -2,6 +2,8 @@
 ! option to feed Seurat the unfiltered matrix.
   -> keep option to feed filtered matrix; pre-reducing the data.
 
+! show sample origin on UMAP plot.
+
 ! mermul on multiple experiments; run a mode where it publishes in the CR directory,
   and NF takes it from there?
 

@@ -102,6 +102,8 @@ process prepare_cr_mux {     // integrate multiple fragment files
 
   tag "cr-mux-prep $sampleid $sampletag"
 
+  container 'quay.io/cellgeni/cellclusterer'
+
   when: !params.mermul && !params.posbam
 
   publishDir "${params.outdir}", pattern: 'cellmetadata',   mode: 'copy'
@@ -114,10 +116,10 @@ process prepare_cr_mux {     // integrate multiple fragment files
   val winsize from params.winsize
 
   output:
-  file("cellmetadata/${sampleid}.names")   into ch_cellnames_many_cr
-  file('cellmetadata/sample.chrlen') into ch_chrom_length_many_cr
-  file('cellmetadata/win.tab')       into ch_wintab_many_cr
-  file('cellmetadata/*.info')        into ch_cellinfo_many_cr
+  file("cellmetadata/${sampleid}.names")  into ch_cellnames_many_cr
+  file('cellmetadata/sample.chrlen')      into ch_chrom_length_many_cr
+  file('cellmetadata/win.tab')            into ch_wintab_many_cr
+  file("cellmetadata/${sampleid}.info")   into ch_cellinfo_many_cr
   set val(sampletag), file("*.fragments.gz"), file('c_c.*') into ch_demux_many_cr
 
   shell:
@@ -218,8 +220,8 @@ process prepare_mm {        // merge multiplets
 process join_muxfiles {
 
   input:
-  file('???.names.txt') from ch_cellnames_many_cr.collect()
-  file(fninfo) from ch_cellinfo_many_cr.collect()
+  file(fnames) from ch_cellnames_many_cr.toSortedList( { a, b -> a.baseName <=> b.baseName } )
+  file(fninfo) from ch_cellinfo_many_cr.toSortedList( { a, b -> a.baseName <=> b.baseName } )
 
   output:
   file('merged.tab') into ch_celltab_manymerged_cr
@@ -227,7 +229,7 @@ process join_muxfiles {
 
   shell:
   '''
-  cat *.names.txt > merged.names
+  cat !{fnames} > merged.names
   nl -v0 -nln -w1 < merged.names > merged.tab
 
   echo 'barcode,total,duplicate,chimeric,unmapped,lowmapq,mitochondrial,passed_filters,cell_id,is__cell_barcode' > singlecell.csv
@@ -313,8 +315,7 @@ process make_big_matrix {
 
   shell:
   '''
-  # cat !{all_edges} | mcxload --stream-split -abc - -strict-tabc !{celltab} -strict-tabr !{wintab} --write-binary -o cell2win.mcx
-  cat !{all_edges} | mcxload --stream-split -abc - -strict-tabc !{celltab} -strict-tabr !{wintab} -o cell2win.mcx
+  cat !{all_edges} | mcxload --stream-split -abc - -strict-tabc !{celltab} -strict-tabr !{wintab} --write-binary -o cell2win.mcx
   sleep 3
   '''
 }
@@ -404,7 +405,7 @@ process seurat_clustering {
 
   container = 'quay.io/cellgeni/cellclusterer'
 
-  publishDir "$params.outdir/qc", mode: 'link', pattern: 'seurat.*'
+  publishDir "$params.outdir/qc", mode: 'link'
 
   when: params.usecls == '__seurat__'
 
@@ -423,17 +424,17 @@ process seurat_clustering {
   shell:
   '''
   R --no-save < !{baseDir}/bin/ca_seurat_clades.R
-  ln -s !{baseDir}/bin/cusanovich2018_lib.r .
-  R --slave --quiet --no-save --args  \\
-  --nclades=!{nclades}                \\
-  --npcs=!{npcs}                      \\
-  --matrix=inputs/filtered_window_bc_matrix.mmtx.gz  \\
-  --regionnames=inputs/regions.names  \\
-  --cellnames=inputs/cells.names      \\
-  --winstats=inputs/win.stats         \\
-  --cellstats=inputs/filtered_cell.stats  \\
-  --sampleid=!{sampleid}              \\
-  < !{baseDir}/bin/cluster_cells_cusanovich2018.R
+  #ln -s !{baseDir}/bin/cusanovich2018_lib.r .
+  #R --slave --quiet --no-save --args  \\
+  #--nclades=!{nclades}                \\
+  #--npcs=!{npcs}                      \\
+  #--matrix=inputs/filtered_window_bc_matrix.mmtx.gz  \\
+  #--regionnames=inputs/regions.names  \\
+  #--cellnames=inputs/cells.names      \\
+  #--winstats=inputs/win.stats         \\
+  #--cellstats=inputs/filtered_cell.stats  \\
+  #--sampleid=!{sampleid}              \\
+  #< !{baseDir}/bin/cluster_cells_cusanovich2018.R
   '''
 }
 

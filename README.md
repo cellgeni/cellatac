@@ -18,6 +18,11 @@ Sanger Cellular Genetics ATAC-seq pipeline by Luz Garcia Alonso, Ni Huang and St
 * Peak/cell matrix based on merging per-cluster peaks.
 * Peak/cell matrix per-cluster.
 
+### Cellatac needs
+
+* Singularity
+
+
 ### Useful options
 
 ```
@@ -40,7 +45,12 @@ Sanger Cellular Genetics ATAC-seq pipeline by Luz Garcia Alonso, Ni Huang and St
 ```
 
 
-### Example invocation
+### Example invocations
+
+This pipeline will need a singularity installation.  It supports two executing
+platforms, *local* (simply execute on the machine you're currently on) and
+*lsf*. To use the latter specify `-profile lsf`.
+
 
 ```
 source=cellgeni/cellatac
@@ -57,16 +67,51 @@ nextflow run $source        \
   --fragments $fragments    \
   --cellbatchsize $cellbatchsize   \
   --posbam $posbam          \
-  --nclades $nclades        \
   --outdir results          \
   --sampleid CR12345678     \
   -profile local            \
   --mermul true             \
   --usecls __seurat__       \
   --mergepeaks true         \
-  --perclusterpeaks true    \
   -with-report reports/report.html \
-  -resume -w work -ansi-log false
+  -resume -w work -ansi-log false \
+  -config my.config
 ```
+
+where `my.config` is used to mount the file location where the input data is stored, e.g.
+
+```
+singularity {
+  runOptions = '-B /some/path1 -B /another/path2'
+}
+```
+
+To run multiple samples:
+
+```
+nextflow run $source        \
+  --muxfile mux.txt         \
+  --cellbatchsize $cellbatchsize   \
+  --outdir results          \
+  -profile local            \
+  --usecls __seurat__       \
+  --mermul false            \
+  --mergepeaks true         \
+  -with-report reports/report.html \
+  -resume -w work -ansi-log false \
+  -c my.config
+```
+
+where `mux.txt` is a tab separated file that looks like this:
+
+```
+1   sampleX   /path/to/cellranger/output/for/sampleX
+2   sampleY   /path/to/cellranger/output/for/sampleY
+3   sampleZ   /path/to/cellranger/output/for/sampleZ
+4   sampleU   /path/to/cellranger/output/for/sampleU
+```
+
+The first column will be used to make the barcodes in each sample unique across the merged samples. As
+such it can be anything, but it is suggested to simply use a range of integers starting at 1.
 
 

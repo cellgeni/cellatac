@@ -85,13 +85,13 @@ process prepare_cr {
      | (sort -rnk 2 || true) | !{filter} > cellmetadata/chosen_cells.info
 
 # Just the names of selected cells. 
-  cut -f 1 cellmetadata/chosen_cells.info | sort > cellmetadata/cells.names
+  cut -f 1 cellmetadata/chosen_cells.info | sort > cellmetadata/cell.names
 
 # Tab file for mcx matrix loading
-  nl -v0 -nln -w1 < cellmetadata/cells.names > cellmetadata/cells.tab
+  nl -v0 -nln -w1 < cellmetadata/cell.names > cellmetadata/cells.tab
 
 # Batch lists for demuxing
-  split -l !{cellbatchsize} cellmetadata/cells.names c_c.
+  split -l !{cellbatchsize} cellmetadata/cell.names c_c.
 
 # Tab file for windows
   ca_make_chromtab.pl !{winsize} cellmetadata/sample.chrlen > cellmetadata/win.tab
@@ -204,13 +204,13 @@ process prepare_mm {        // merge multiplets
   merge-multiplets --chrom cellmetadata/sample.chrlen --max-n !{params.nbcest} --debug --outfrg fragmints2.tsv.gz fragmints.tsv.gz cellmetadata/bc-mm.map
 
 # Just the names of selected cells.
-  cut -f 2 cellmetadata/bc-mm.map | sort -u > cellmetadata/cells.names
+  cut -f 2 cellmetadata/bc-mm.map | sort -u > cellmetadata/cell.names
 
 # Tab file for mcx matrix loading
-  nl -v0 -nln -w1 < cellmetadata/cells.names > cellmetadata/cells.tab
+  nl -v0 -nln -w1 < cellmetadata/cell.names > cellmetadata/cells.tab
 
 # Batch lists for demuxing
-  split -l !{cellbatchsize} cellmetadata/cells.names c_c.
+  split -l !{cellbatchsize} cellmetadata/cell.names c_c.
 
 # Tab file for windows
   ca_make_chromtab.pl !{winsize} cellmetadata/sample.chrlen > cellmetadata/win.tab
@@ -339,6 +339,17 @@ process join_sample_matrix {
   file(celltab) from ch_celltab5.collect()
   val ntfs      from  params.ntfs
 
+  output:
+  file('mmtx') into ch_load_mmtx2
+
+/*
+Need to create these outputs;
+ideally would change those hardcoded names or unhardcode them.
+f_binary_mat <- readMM(file = 'inputs/filtered_window_bc_matrix.mmtx.gz')
+regions.names = read.delim('inputs/regions.names', header = FALSE, stringsAsFactors = FALSE)
+cell.names = read.delim('inputs/cell.names', header = FALSE, stringsAsFactors = FALSE)
+*/
+
   shell:
   '''
   ca_winsect.pl !{ntfs} !{wintab} !{win} > __win.stats
@@ -352,7 +363,8 @@ process join_sample_matrix {
   export MCLXIOFORMAT=8
 
 		# below constructs an mcxi command to add up a bunch of matrices.
-		# it looks horrible, the redeeming feature is that it is really fast.
+		# The construction looks horrible, the redeeming feature is that it is really fast
+    # and the constructed file is pretty simple.
   (
 	echo 'mcxi <<EOC'
 	echo __m*.mcx | perl -ane '@G = map { "/$_ lm add\\n" } @F; $G[0] =~ s/ add//; print @G;'
@@ -369,10 +381,13 @@ process join_sample_matrix {
  >&2 echo "Producing matrixmarket format"
 	n_entries=$(mcx query -imx w2c.ri.mcx | tail -n +2 | datamash sum 2)
 
+  mkdir mmtx
   ca_make_mmtx.sh -r win.names -c cell.names -m w2c.ri.mcx \\
-      -e $n_entries -t pattern -o filtered_window_bc_matrix.mmtx.gz
+      -e $n_entries -t pattern -o mmtx/filtered_window_bc_matrix.mmtx.gz
   ln win.names    filtered_win.txt
+  ln win.names    mmtx/regions.names
   ln cell.names   filtered_bc.txt
+  ln cell.names   mmtx/cell.names
   '''
 }
 
@@ -436,7 +451,7 @@ process filter_big_matrix {
   publishDir "$params.outdir/win_matrix", mode: 'link', pattern: 'other_publish/filtered*',
     saveAs: { fname -> fname - ~/other_publish\// }
 
-  when: true
+  when: false
 
   input:
   file('cells.tab') from ch_celltab2
@@ -446,7 +461,7 @@ process filter_big_matrix {
   val ntfs      from  params.ntfs
 
   output:
-  file('outputs') into (ch_load_mmtx, ch_load_mmtx2)
+  file('outputs') into ch_load_mmtx
   file('other_publish/filtered*')
 
   shell:          
@@ -465,10 +480,10 @@ process filter_big_matrix {
       -W ../outputs/win.stats                    \\
       -R ../outputs/regions.names                \\
       -X ../outputs/filtered_window_bc_matrix.mmtx.gz  \\
-      -N ../outputs/cells.names
+      -N ../outputs/cell.names
 
   ln ../outputs/regions.names    ../other_publish/filtered_win.txt
-  ln ../outputs/cells.names      ../other_publish/filtered_bc.txt
+  ln ../outputs/cell.names      ../other_publish/filtered_bc.txt
   ln ../outputs/filtered_window_bc_matrix.mmtx.gz   ../other_publish
   ln ../outputs/filtered_cell.stats                 ../other_publish
   '''
@@ -483,14 +498,14 @@ process seurat_clustering {
 
   publishDir "$params.outdir/qc", mode: 'link'
 
-  when: params.usecls == '__seurat__' && !params.devel
+  when: params.usecls == '__seurat__'
 
   input:
   val nclades   from  params.nclades
   val sampleid  from  params.sampleid
   val npcs      from  params.npcs
   file('singlecell.csv') from ch_cellfile_seurat.mix(ch_seurat_singlecellcsv).collect()
-  file('inputs') from ch_load_mmtx2
+  file('mmtx') from ch_load_mmtx2
 
   output:
   file('seurat-clades.tsv') into ch_seurat_clades
@@ -506,7 +521,7 @@ process seurat_clustering {
   #--npcs=!{npcs}                      \\
   #--matrix=inputs/filtered_window_bc_matrix.mmtx.gz  \\
   #--regionnames=inputs/regions.names  \\
-  #--cellnames=inputs/cells.names      \\
+  #--cellnames=inputs/cell.names      \\
   #--winstats=inputs/win.stats         \\
   #--cellstats=inputs/filtered_cell.stats  \\
   #--sampleid=!{sampleid}              \\
@@ -515,7 +530,7 @@ process seurat_clustering {
 }
 
 
-process do_the_clustering {
+process cusanovich_clustering {
 
   tag "cusanovich2018"
 
@@ -544,7 +559,7 @@ process do_the_clustering {
   --npcs=!{npcs}                      \\
   --matrix=inputs/filtered_window_bc_matrix.mmtx.gz  \\
   --regionnames=inputs/regions.names  \\
-  --cellnames=inputs/cells.names      \\
+  --cellnames=inputs/cell.names       \\
   --winstats=inputs/win.stats         \\
   --cellstats=inputs/filtered_cell.stats  \\
   --sampleid=!{sampleid}              \\

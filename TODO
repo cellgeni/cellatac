@@ -1,6 +1,21 @@
 
+demux;
+(send top level directory?)
+(create meta file within the sending process?)
+  anyway, send files
+    -> read matrix  using global win.tab
+          and global cell.tab? slightly cumbersome but very useful
+       find top 20k windows, stick in simple sample.winlist
+    -> send (winlist, matrix) to merge program.
+       merge program can add matrices, create tab file and submatrix
+
+? is within-sample parallelised demuxing actually a good idea? measure ...
+
 ! option to feed Seurat the unfiltered matrix.
   -> keep option to feed filtered matrix; pre-reducing the data.
+
+! investigate integrating mermul code (_mm) with plain cr code (_cr) so that
+  mermul becomes an option rather than a separate process.
 
 ! show sample origin on UMAP plot.
 

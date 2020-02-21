@@ -24,6 +24,7 @@ params.mergepeaks    =  true
 params.perclusterpeaks  =  false
 
 params.muxfile       =  null
+params.devel         =  true
 
 if ((!params.fragments || !params.cellcsv || !params.posbam) && !params.muxfile) {
   exit 1, "Please supply --fragments <CR-fragment-file> --cellcsv <CR-cellcsv-file> --posbam <CR-posbam-file>"
@@ -111,7 +112,7 @@ process prepare_cr_mux {     // integrate multiple fragment files
   input:
   set val(sampletag), val(sampleid), val(root) from ch_mux
         .splitCsv(sep: '\t')
-        .view()
+        .view{"manifest: $it"}
   val cellbatchsize from params.cellbatchsize
   val winsize from params.winsize
 
@@ -225,7 +226,7 @@ process join_muxfiles {
 
   output:
   file('merged.tab') into ch_celltab_manymerged_cr
-  file('singlecell.csv') into ch_singlecellcsv
+  file('singlecell.csv') into ch_seurat_singlecellcsv
 
   shell:
   '''
@@ -249,11 +250,11 @@ process join_muxfiles {
 
   ch_celltab_manymerged_cr
     .mix(ch_celltab_cr, ch_celltab_mm)
-    .into { ch_celltab; ch_celltab2; ch_celltab3 }
+    .into { ch_celltab; ch_celltab2; ch_celltab3; ch_celltab4; ch_celltab5 }
 
   ch_wintab_many_cr.first()
     .mix(ch_wintab_cr, ch_wintab_mm)
-    .into { ch_wintab; ch_wintab2 }
+    .into { ch_wintab; ch_wintab2; ch_wintab3; ch_wintab4 }
 
   ch_chrom_length_many_cr.first()
     .mix(ch_chrom_length_cr, ch_chrom_length_mm)
@@ -261,7 +262,7 @@ process join_muxfiles {
 
   ch_fragfile_cr.map { fragf -> [ "cr", fragf ] }
     .join(ch_demux_cr)
-    .mix(ch_demux_mm, ch_demux_many_cr)
+    .mix(ch_demux_mm, ch_demux_many_cr)           // fixme this block is a bit convoluted
     .transpose()
     .set { ch_demux_batch }
 
@@ -271,11 +272,13 @@ process sample_demux {
   tag "sample-$sampletag batch-$batchtag"
 
   input:
-  set val(sampletag), file(frags), file(cells) from ch_demux_batch
+  set val(sampletag), file(frags), file(cells) from ch_demux_batch.view{"sample_demux: $it"}
 
   output:
   file('*celldata/[ACGT][ACGT][ACGT][ACGT]/*.bed') into ch_demuxed
-  file('*celldata/mtx*.edges') into ch_matrix
+
+  file('*celldata/mtx*.edges') into ch_all_edges
+  set val(sampletag), file('*celldata/mtx*.edges') into ch_sample_edges
 
   shell:
   batchtag = cells.toString() - 'c_c.'
@@ -298,6 +301,82 @@ ch_demuxed
   .into { ch_cellpaths_clusterindex; ch_cellpaths_masterpeakcov }
   
 
+process make_sample_matrix {
+
+  tag "$sampleid"
+
+  container 'quay.io/cellgeni/cellclusterer'
+  
+  output:
+  file("${sampleid}.w2c.mcx") into ch_sample_join_matrix
+  file("${sampleid}.stats") into ch_sample_join_window
+
+  input:
+  set val(sampleid), file(fnedges) from ch_sample_edges.groupTuple(sort: true).view()
+  file('allcelltab') from ch_celltab4.collect()
+  file('wintab') from ch_wintab3.collect()
+
+  shell:
+  '''
+  export MCLXIOFORMAT=8
+	mtx=!{sampleid}.c2w.mcx
+  mtxtp=!{sampleid}.w2c.mcx
+  cat !{fnedges} | mcxload --stream-split -abc - -strict-tabc allcelltab -strict-tabr wintab --write-binary -o $mtx
+  mcxi /$mtx lm tp /$mtxtp wm
+  mcx query -imx $mtxtp -tab wintab | tail -n +2 > !{sampleid}.stats
+  '''
+}
+
+
+process join_sample_matrix {
+
+  container 'quay.io/cellgeni/cellclusterer'
+ 
+  input:
+  file(w2c) from ch_sample_join_matrix.collect()
+  file(win) from ch_sample_join_window.collect()
+  file(wintab) from ch_wintab4.collect()
+  file(celltab) from ch_celltab5.collect()
+  val ntfs      from  params.ntfs
+
+  shell:
+  '''
+  ca_winsect.pl !{ntfs} !{wintab} !{win} > __win.stats
+  cut -f 1,2 __win.stats | sort -nk 1 > window.tab
+  i=1000
+  for m in !{w2c}; do
+    mcxsubs -imx $m --from-disk -tab window.tab "dom(c, t()), out(__m$i.mcx,wb)"
+    i=$((i+1))
+    echo "done $m"
+  done
+  export MCLXIOFORMAT=8
+
+		# below constructs an mcxi command to add up a bunch of matrices.
+		# it looks horrible, the redeeming feature is that it is really fast.
+  (
+	echo 'mcxi <<EOC'
+	echo __m*.mcx | perl -ane '@G = map { "/$_ lm add\\n" } @F; $G[0] =~ s/ add//; print @G;'
+  echo tp /c2w.mcx wm pop /w2c.mcx wm
+  echo EOC
+  ) > makematrix.sh
+ 	bash -e makematrix.sh
+  # ri: re-indexed.
+  mcxmap -imx w2c.mcx -make-mapc win.map -o w2c.ri.mcx
+  mcxmap -tab window.tab -map win.map -o win.ri.tab
+  cut -f 2 win.ri.tab > win.names
+  cut -f 2 !{celltab} > cell.names
+
+ >&2 echo "Producing matrixmarket format"
+	n_entries=$(mcx query -imx w2c.ri.mcx | tail -n +2 | datamash sum 2)
+
+  ca_make_mmtx.sh -r win.names -c cell.names -m w2c.ri.mcx \\
+      -e $n_entries -t pattern -o filtered_window_bc_matrix.mmtx.gz
+  ln win.names    filtered_win.txt
+  ln cell.names   filtered_bc.txt
+  '''
+}
+
+
 process make_big_matrix {
 
   container 'quay.io/cellgeni/cellclusterer'
@@ -305,7 +384,7 @@ process make_big_matrix {
   publishDir "${params.outdir}/cellmetadata", mode: 'link', pattern: 'cell2win.mcx'
 
   input:
-  file all_edges from ch_matrix.toSortedList()
+  file all_edges from ch_all_edges.toSortedList()
   file celltab from ch_celltab
   file wintab  from ch_wintab
 
@@ -346,9 +425,6 @@ process mmtx_big_matrix  {
   cp wintab  raw_window.txt
   '''
 }
-
-
-//      ^----- split between demux part and analysis part -----_      //
 
 
 process filter_big_matrix {
@@ -407,13 +483,13 @@ process seurat_clustering {
 
   publishDir "$params.outdir/qc", mode: 'link'
 
-  when: params.usecls == '__seurat__'
+  when: params.usecls == '__seurat__' && !params.devel
 
   input:
   val nclades   from  params.nclades
   val sampleid  from  params.sampleid
   val npcs      from  params.npcs
-  file('singlecell.csv') from ch_cellfile_seurat.mix(ch_singlecellcsv).collect()
+  file('singlecell.csv') from ch_cellfile_seurat.mix(ch_seurat_singlecellcsv).collect()
   file('inputs') from ch_load_mmtx2
 
   output:
@@ -561,7 +637,11 @@ process peaks_makemasterlist {
 
   publishDir "${params.outdir}/peaks", mode: 'link'
 
-  when: params.mergepeaks
+              // fixme bugme
+              // why do I need below params.devel? make small test case with similar process logic.
+              // ch_combine_clusterpeaks seems to send empty file set, but its process clusters_macs2 should not run at all.
+
+  when: params.mergepeaks && !params.devel
 
   input:
   file np_files from ch_combine_clusterpeaks.map { it[1] }.toSortedList()        // map removes the cluster ID.
@@ -574,6 +654,7 @@ process peaks_makemasterlist {
     // NOTE may want to encode some cluster parameters in the file name? Also preceding processes
   shell:
   '''
+  exit 1
   cat !{np_files} | cut -f 1-3 | sort -k1,1 -k2,2n > allclusters_peaks_sorted.bed
   # use -d -1 to avoid mergeing regions overlapping only 1bp
   bedtools merge -i allclusters_peaks_sorted.bed -d -1 > allclusters_masterlist.bed

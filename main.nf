@@ -118,8 +118,8 @@ process prepare_cr_mux {     // integrate multiple fragment files
 
   output:
   file("cellmetadata/${sampleid}.names")  into ch_cellnames_many_cr
-  file('cellmetadata/sample.chrlen')      into ch_chrom_length_many_cr
-  file('cellmetadata/win.tab')            into ch_wintab_many_cr
+  file('cellmetadata/*-sample.chrlen')    into ch_chrom_length_many_cr
+  file('cellmetadata/*-win.tab')          into ch_wintab_many_cr
   file("cellmetadata/${sampleid}.info")   into ch_cellinfo_many_cr
   set val(sampletag), file("*.fragments.gz"), file('c_c.*') into ch_demux_many_cr
 
@@ -136,12 +136,15 @@ process prepare_cr_mux {     // integrate multiple fragment files
   ln -s !{root}/singlecell.csv $cellfile
 
   mkdir -p cellmetadata
+
 # Chrosome length file.
   samtools view -H $bamfile  \\
     | grep '@SQ'$'\\t''SN:'    \\
     | perl -ne '/\\bSN:(\\S+)/ && ($name=$1); /\\bLN:(\\d+)/ && ($len=$1); print "$name\\t$len\\n";' \\
     | uniq                    \\
-    > cellmetadata/sample.chrlen
+    > cellmetadata/!{sampletag}-sample.chrlen
+# Tab file for windows
+  ca_make_chromtab.pl !{winsize} cellmetadata/!{sampletag}-sample.chrlen > cellmetadata/!{sampletag}-win.tab
 
 # Names + info of selected cells.
   perl -F, -ane 's/,/\t/g; print "!{sampletag}-$_" if $F[9] == 1' $cellfile \\
@@ -153,8 +156,6 @@ process prepare_cr_mux {     // integrate multiple fragment files
 # Batch lists for demuxing
   split -l !{cellbatchsize} cellmetadata/!{sampleid}.names c_c.
 
-# Tab file for windows
-  ca_make_chromtab.pl !{winsize} cellmetadata/sample.chrlen > cellmetadata/win.tab
   '''
 }
 
@@ -252,11 +253,11 @@ process join_muxfiles {
     .mix(ch_celltab_cr, ch_celltab_mm)
     .into { ch_celltab; ch_celltab2; ch_celltab3; ch_celltab4; ch_celltab5 }
 
-  ch_wintab_many_cr.first()
+  ch_wintab_many_cr.toSortedList().flatten().first()
     .mix(ch_wintab_cr, ch_wintab_mm)
     .into { ch_wintab; ch_wintab2; ch_wintab3; ch_wintab4 }
 
-  ch_chrom_length_many_cr.first()
+  ch_chrom_length_many_cr.toSortedList().flatten().first()
     .mix(ch_chrom_length_cr, ch_chrom_length_mm)
     .into { ch_chrom_length; ch_chrom_length2; ch_chrom_length3 }
 
@@ -316,6 +317,7 @@ process make_sample_matrix {
   file('allcelltab') from ch_celltab4.collect()
   file('wintab') from ch_wintab3.collect()
 
+            // fixme: write w2c directly (swap fields)
   shell:
   '''
   export MCLXIOFORMAT=8

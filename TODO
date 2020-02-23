@@ -1,13 +1,17 @@
 
-demux;
-(send top level directory?)
-(create meta file within the sending process?)
-  anyway, send files
-    -> read matrix  using global win.tab
-          and global cell.tab? slightly cumbersome but very useful
-       find top 20k windows, stick in simple sample.winlist
-    -> send (winlist, matrix) to merge program.
-       merge program can add matrices, create tab file and submatrix
+
+- seurat stderr:
+      Warning: Feature names cannot have underscores ('_'), replacing with dashes ('-')
+      Warning message:
+      In CreateSeuratObject(counts = f_binary_mat, assay = "peaks", project = "ATAC",  :
+        Some cells in meta.data not present in provided counts matrix.
+        Performing TF-IDF normalization
+  -> it has a csv header and tsv lines; that may be the cause.
+
+
+- winsect output no longer informative full window set loaded. ho hum.
+- publishing everything that I used to publish? Raw data needed?
+
 
 ? is within-sample parallelised demuxing actually a good idea? measure ...
 

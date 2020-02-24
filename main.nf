@@ -222,8 +222,8 @@ process prepare_mm {        // merge multiplets
 process join_muxfiles {
 
   input:
-  file(fnames) from ch_cellnames_many_cr.toSortedList( { a, b -> a.baseName <=> b.baseName } )
-  file(fninfo) from ch_cellinfo_many_cr.toSortedList( { a, b -> a.baseName <=> b.baseName } )
+  file(fnames) from ch_cellnames_many_cr.toSortedList { it.name }
+  file(fninfo) from ch_cellinfo_many_cr.toSortedList { it.name }
 
   output:
   file('merged.tab') into ch_celltab_manymerged_cr
@@ -253,12 +253,12 @@ process join_muxfiles {
     .mix(ch_celltab_cr, ch_celltab_mm)
     .into { ch_celltab; ch_celltab2; ch_celltab3; ch_celltab4; ch_celltab5 }
 
-  ch_wintab_many_cr.toSortedList{ a,b -> a.baseName <=> b.baseName }
+  ch_wintab_many_cr.toSortedList{ it.name }
     .flatten().first()
     .mix(ch_wintab_cr, ch_wintab_mm)
     .into { ch_wintab; ch_wintab2; ch_wintab3; ch_wintab4 }
 
-  ch_chrom_length_many_cr.toSortedList().flatten().first()
+  ch_chrom_length_many_cr.toSortedList { it.name }.flatten().first()
     .mix(ch_chrom_length_cr, ch_chrom_length_mm)
     .into { ch_chrom_length; ch_chrom_length2; ch_chrom_length3 }
 
@@ -336,8 +336,8 @@ process join_sample_matrix {
   container 'quay.io/cellgeni/cellclusterer'
  
   input:
-  file(w2c) from ch_sample_join_matrix.collect()
-  file(win) from ch_sample_join_window.toSortedList { a,b -> a.baseName <=> b.baseName }
+  file(w2c) from ch_sample_join_matrix.toSortedList { it.name }
+  file(win) from ch_sample_join_window.toSortedList { it.name }
   file(wintab) from ch_wintab4.collect()
   file(celltab) from ch_celltab5.collect()
   val ntfs      from  params.ntfs
@@ -346,21 +346,20 @@ process join_sample_matrix {
   file('mmtx') into ch_load_mmtx2
 
 /*
-Need to create these outputs;
-ideally would change those hardcoded names or unhardcode them.
-f_binary_mat <- readMM(file = 'inputs/filtered_window_bc_matrix.mmtx.gz')
-regions.names = read.delim('inputs/regions.names', header = FALSE, stringsAsFactors = FALSE)
-cell.names = read.delim('inputs/cell.names', header = FALSE, stringsAsFactors = FALSE)
+Need to create these outputs, as they are currently hardcoded in seurat script (fixme).
+    f_binary_mat
+    regions.names
+    cell.names
 */
 
   shell:
   '''
   ca_winsect.pl !{ntfs} !{wintab} !{win} > __win.stats
   cut -f 1,2 __win.stats | sort -nk 1 > window.tab
-  i=1000
   for m in !{w2c}; do
-    mcxsubs -imx $m --from-disk -tab window.tab "dom(c, t()), out(__m$i.mcx,wb)"
-    i=$((i+1))
+    # input has format <tag>.w2c.mcx
+    subfile=__${m%.w2c.mcx}.sub.mcx
+    mcxsubs -imx $m --from-disk -tab window.tab "dom(c, t()), out($subfile,wb)"
     echo "done $m"
   done
   export MCLXIOFORMAT=8
@@ -370,7 +369,7 @@ cell.names = read.delim('inputs/cell.names', header = FALSE, stringsAsFactors = 
     # and the constructed file is pretty simple.
   (
 	echo 'mcxi <<EOC'
-	echo __m*.mcx | perl -ane '@G = map { "/$_ lm add\\n" } @F; $G[0] =~ s/ add//; print @G;'
+	echo __*.sub.mcx | perl -ane '@G = map { "/$_ lm add\\n" } @F; $G[0] =~ s/ add//; print @G;'
   echo tp /c2w.mcx wm pop /w2c.mcx wm
   echo EOC
   ) > makematrix.sh
@@ -402,7 +401,7 @@ process make_big_matrix {
   publishDir "${params.outdir}/cellmetadata", mode: 'link', pattern: 'cell2win.mcx'
 
   input:
-  file all_edges from ch_all_edges.toSortedList()
+  file all_edges from ch_all_edges.toSortedList{ it.name }
   file celltab from ch_celltab
   file wintab  from ch_wintab
 
@@ -662,7 +661,7 @@ process peaks_makemasterlist {
   when: params.mergepeaks && !params.devel
 
   input:
-  file np_files from ch_combine_clusterpeaks.map { it[1] }.toSortedList()        // map removes the cluster ID.
+  file np_files from ch_combine_clusterpeaks.map { it[1] }.toSortedList { it.name }
   file sample_idxstats from ch_chrom_length.collect()
 
   output:
@@ -697,7 +696,7 @@ process cells_masterlist_coverage {
   file sample_chrlen from ch_chrom_length2.collect()
 
   file(celldef_list) from ch_cellpaths_masterpeakcov
-    .toSortedList()
+    .toSortedList { it.name }
     .flatMap()
     .collate(params.cellbatchsize)
     .map { it.join('\n') + '\n' }

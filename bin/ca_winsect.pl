@@ -21,6 +21,8 @@ use warnings;
 my $n_windows_required = shift || die "Need top-frequent site number";
 my $fgenometab = shift || die "Need global genome tab file";
 
+my @FILENAMES = @ARGV;
+
 open(STATS, ">winsect.stats") || die "Cannot open stats file";
 
 sub read_key_val {
@@ -89,11 +91,13 @@ for my $x (@sets) {
 
 print STDERR "$nglobal total\n";
 
+local $" = "\t";
+print STATS "Window\tSumrank\t@FILENAMES\n";
+
 for my $w (@global_select) {
   print "$gtab{$w}\t$w\t$global_sum_rank{$w}{total}\n";
-  my @stats = map { "\t$_->[1]{$w}"  } @sets;
-  local $" = '';
-  print STATS "$w\t$global_sum_rank{$w}{total}@stats\n";
+  my @stats = map { $_->[1]{$w} } @sets;
+  print STATS "$w\t$global_sum_rank{$w}{total}\t@stats\n";
 }
 
 close(STATS);

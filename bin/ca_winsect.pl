@@ -21,6 +21,8 @@ use warnings;
 my $n_windows_required = shift || die "Need top-frequent site number";
 my $fgenometab = shift || die "Need global genome tab file";
 
+open(STATS, ">winsect.stats") || die "Cannot open stats file";
+
 sub read_key_val {
   my $f = shift;
   open(F, "<$f") || die "No $f";
@@ -69,12 +71,6 @@ for my $x (@sets) {
   for my $k (keys %$setx) {
     $global_sum_rank{$k}{total} += $setx->{$k};
   }
-  for my $y (@sets) {
-    my ($iy, $sety) = @$y;
-    my $nshare = grep { defined($sety->{$_}) } keys %$setx;
-    printf STDERR "%8d", $nshare;
-  }
-  print STDERR "\n";
 }
 
 my @global_win = sort { $global_sum_rank{$a}{total} <=> $global_sum_rank{$b}{total} } keys %global_sum_rank;
@@ -95,5 +91,10 @@ print STDERR "$nglobal total\n";
 
 for my $w (@global_select) {
   print "$gtab{$w}\t$w\t$global_sum_rank{$w}{total}\n";
+  my @stats = map { "\t$_->[1]{$w}"  } @sets;
+  local $" = '';
+  print STATS "$w\t$global_sum_rank{$w}{total}@stats\n";
 }
+
+close(STATS);
 

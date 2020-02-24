@@ -253,7 +253,8 @@ process join_muxfiles {
     .mix(ch_celltab_cr, ch_celltab_mm)
     .into { ch_celltab; ch_celltab2; ch_celltab3; ch_celltab4; ch_celltab5 }
 
-  ch_wintab_many_cr.toSortedList().flatten().first()
+  ch_wintab_many_cr.toSortedList{ a,b -> a.baseName <=> b.baseName }
+    .flatten().first()
     .mix(ch_wintab_cr, ch_wintab_mm)
     .into { ch_wintab; ch_wintab2; ch_wintab3; ch_wintab4 }
 
@@ -336,7 +337,7 @@ process join_sample_matrix {
  
   input:
   file(w2c) from ch_sample_join_matrix.collect()
-  file(win) from ch_sample_join_window.collect()
+  file(win) from ch_sample_join_window.toSortedList { a,b -> a.baseName <=> b.baseName }
   file(wintab) from ch_wintab4.collect()
   file(celltab) from ch_celltab5.collect()
   val ntfs      from  params.ntfs

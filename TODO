@@ -1,5 +1,8 @@
 
 
+- clus_peak_matrix/13.peak.txt has chr1:858681-859037
+  but winsect output/tab has other format.
+
 - seurat stderr:
       Warning: Feature names cannot have underscores ('_'), replacing with dashes ('-')
       Warning message:

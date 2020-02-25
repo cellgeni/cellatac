@@ -221,21 +221,23 @@ process prepare_mm {        // merge multiplets
 
 process join_muxfiles {
 
+  publishDir "${params.outdir}/cellmetadata", pattern: 'singlecell.tsv',   mode: 'link'
+
   input:
   file(fnames) from ch_cellnames_many_cr.toSortedList { it.name }
   file(fninfo) from ch_cellinfo_many_cr.toSortedList { it.name }
 
   output:
   file('merged.tab') into ch_celltab_manymerged_cr
-  file('singlecell.csv') into ch_seurat_singlecellcsv
+  file('singlecell.tsv') into ch_seurat_singlecellcsv
 
   shell:
   '''
   cat !{fnames} > merged.names
   nl -v0 -nln -w1 < merged.names > merged.tab
 
-  echo -e "barcode\\ttotal\\tduplicate\\tchimeric\\tunmapped\\tlowmapq\\tmitochondrial\\tpassed_filters\\tcell_id\\tis__cell_barcode\\tTSS_fragments\\tDNase_sensitive_region_fragments\\tenhancer_region_fragments\\tpromoter_region_fragments\\ton_target_fragments\\tblacklist_region_fragments\\tpeak_region_fragments\\tpeak_region_cutsites" > singlecell.csv
-  cat !{fninfo} >> singlecell.csv
+  echo -e "barcode\\ttotal\\tduplicate\\tchimeric\\tunmapped\\tlowmapq\\tmitochondrial\\tpassed_filters\\tcell_id\\tis__cell_barcode\\tTSS_fragments\\tDNase_sensitive_region_fragments\\tenhancer_region_fragments\\tpromoter_region_fragments\\ton_target_fragments\\tblacklist_region_fragments\\tpeak_region_fragments\\tpeak_region_cutsites" > singlecell.tsv
+  cat !{fninfo} >> singlecell.tsv
   '''
 }
 

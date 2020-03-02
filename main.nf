@@ -650,7 +650,7 @@ process clusters_macs2 {
 }
 
 
-process peaks_makemasterlist {
+process peaks_make_masterlist {
 
   tag "masterlist"
 

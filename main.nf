@@ -49,6 +49,10 @@ thebamfile  = params.posbam    ? file(params.posbam)    : null
 */
 
 
+def just_name(full_file_path) {
+  full_file_path.split('/')[-1]           // fixme: use generic path separator
+}
+
 process prepare_cr {
 
   tag "cr-prep $cellbatchsize"
@@ -224,8 +228,8 @@ process join_muxfiles {
   publishDir "${params.outdir}/cellmetadata", pattern: 'singlecell.tsv',   mode: 'link'
 
   input:
-  file(fnames) from ch_cellnames_many_cr.toSortedList { it.name }
-  file(fninfo) from ch_cellinfo_many_cr.toSortedList { it.name }
+  file(fnames) from ch_cellnames_many_cr.toSortedList { just_name(it) }
+  file(fninfo) from ch_cellinfo_many_cr.toSortedList { just_name(it) }
 
   output:
   file('merged.tab') into ch_celltab_manymerged_cr
@@ -255,12 +259,12 @@ process join_muxfiles {
     .mix(ch_celltab_cr, ch_celltab_mm)
     .into { ch_celltab; ch_celltab2; ch_celltab3; ch_celltab4; ch_celltab5 }
 
-  ch_wintab_many_cr.toSortedList{ it.name }
+  ch_wintab_many_cr.toSortedList{ just_name(it) }
     .flatten().first()
     .mix(ch_wintab_cr, ch_wintab_mm)
     .into { ch_wintab; ch_wintab2; ch_wintab3; ch_wintab4 }
 
-  ch_chrom_length_many_cr.toSortedList { it.name }.flatten().first()
+  ch_chrom_length_many_cr.toSortedList { just_name(it) }.flatten().first()
     .mix(ch_chrom_length_cr, ch_chrom_length_mm)
     .into { ch_chrom_length; ch_chrom_length2; ch_chrom_length3 }
 
@@ -338,8 +342,8 @@ process join_sample_matrix {
   container 'quay.io/cellgeni/cellclusterer'
  
   input:
-  file(w2c) from ch_sample_join_matrix.toSortedList { it.name }
-  file(win) from ch_sample_join_window.toSortedList { it.name }
+  file(w2c) from ch_sample_join_matrix.toSortedList { just_name(it) }
+  file(win) from ch_sample_join_window.toSortedList { just_name(it) }
   file(wintab) from ch_wintab4.collect()
   file(celltab) from ch_celltab5.collect()
   val ntfs      from  params.ntfs
@@ -403,7 +407,7 @@ process make_big_matrix {
   publishDir "${params.outdir}/cellmetadata", mode: 'link', pattern: 'cell2win.mcx'
 
   input:
-  file all_edges from ch_all_edges.toSortedList{ it.name }
+  file all_edges from ch_all_edges.toSortedList{ just_name(it) }
   file celltab from ch_celltab
   file wintab  from ch_wintab
 
@@ -663,7 +667,7 @@ process peaks_make_masterlist {
   when: params.mergepeaks && !params.devel
 
   input:
-  file np_files from ch_combine_clusterpeaks.map { it[1] }.toSortedList { it.name }
+  file np_files from ch_combine_clusterpeaks.map { it[1] }.toSortedList { just_name(it) }
   file sample_idxstats from ch_chrom_length.collect()
 
   output:
@@ -673,7 +677,6 @@ process peaks_make_masterlist {
     // NOTE may want to encode some cluster parameters in the file name? Also preceding processes
   shell:
   '''
-  exit 1
   cat !{np_files} | cut -f 1-3 | sort -k1,1 -k2,2n > allclusters_peaks_sorted.bed
   # use -d -1 to avoid mergeing regions overlapping only 1bp
   bedtools merge -i allclusters_peaks_sorted.bed -d -1 > allclusters_masterlist.bed
@@ -698,7 +701,7 @@ process cells_masterlist_coverage {
   file sample_chrlen from ch_chrom_length2.collect()
 
   file(celldef_list) from ch_cellpaths_masterpeakcov
-    .toSortedList { it.name }
+    .toSortedList { just_name(it) }
     .flatMap()
     .collate(params.cellbatchsize)
     .map { it.join('\n') + '\n' }

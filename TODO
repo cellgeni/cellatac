@@ -1,4 +1,15 @@
 
+cells_masterlist_coverage
+  creates a lot of mp.bed files, but it could create just a single file, don't think
+  individual files are needed.
+
+bin/ca_peak_matrix.sh
+  creates a cell tab file, but it also receives a cell tab file.
+  This is probably old code not having caught up with new code downstream.
+      maybe relevant in make_master_peakmatrix, less so in make_subset_peakmatrix
+
+
+
 
 - seurat stderr:
       Warning: Feature names cannot have underscores ('_'), replacing with dashes ('-')
@@ -8,17 +19,11 @@
         Performing TF-IDF normalization
   -> it has a csv header and tsv lines; that may be the cause.
 
-- publishing everything that I used to publish? Raw data needed?
-
-? is within-sample parallelised demuxing actually a good idea? measure ...
-
-! option to feed Seurat the unfiltered matrix.
-  -> keep option to feed filtered matrix; pre-reducing the data.
+? is within-sample parallelised demuxing actually a good idea?
+  It does give a handle on #concurrent file handles open.
 
 ! investigate integrating mermul code (_mm) with plain cr code (_cr) so that
   mermul becomes an option rather than a separate process.
-
-! show sample origin on UMAP plot.
 
 ! mermul on multiple experiments; run a mode where it publishes in the CR directory,
   and NF takes it from there?

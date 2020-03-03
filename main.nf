@@ -658,6 +658,8 @@ process peaks_make_masterlist {
 
   tag "masterlist"
 
+  container = 'quay.io/cellgeni/cellclusterer'
+
   publishDir "${params.outdir}/peaks", mode: 'link'
 
               // fixme bugme
@@ -690,6 +692,8 @@ process peaks_make_masterlist {
 process cells_masterlist_coverage {
 
   tag "${celldef_list}"
+
+  container = 'quay.io/cellgeni/cellclusterer'
 
   cache 'lenient'
 

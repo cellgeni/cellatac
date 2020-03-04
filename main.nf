@@ -23,6 +23,7 @@ params.mermul        =  false
 params.usecls        =  '__seurat__'
 params.mergepeaks    =  true
 params.perclusterpeaks  =  false
+params.stopatcluster =  false
 
 params.muxfile       =  null
 
@@ -382,13 +383,14 @@ Need to create these outputs, as they are currently hardcoded in seurat script (
 	names(sumrank) <- rownames(rd)
 	srk_names <- names(sort(sumrank))[1:N]
 	rd2 <- rd[,-1]			    # remove sumrank column
-	rd2[rd2 > 2*N] <- 2*N		# truncate counts at 2N; to avoid high-rank windows dominating; point of interest/debate
+	rd2[rd2 > 1*N] <- 1*N		# truncate counts at 1N; to avoid high-rank windows dominating; point of interest/debate
 													# Given skewed quantile this probably does not have any impact.
-	win_choice <- apply(rd2, 1, function (x) { quantile(x, 0.3) - quantile(x, 0.05) })
-													# 0.25 quantile width ~ about a quarter of samples.
+	win_choice <- apply(rd2, 1, function (x) { quantile(x, 0.6) - quantile(x, 0.1) })
+
 	iqr2_names <- names(sort(win_choice, decreasing=TRUE))[1:N]
 	sum(srk_names %in% iqr2_names)
 	write.table(wintab[ wintab[,"V2"] %in% iqr2_names, ], "window.tab", quote=F, row.names=F, col.names=F, sep="\t")
+  write.table(as.data.frame(win_choice), "window.quant", quote=F, row.names=T, col.names=F, sep="\t")
 	EOC
   fi
 
@@ -460,6 +462,8 @@ process mmtx_big_matrix  {
   container 'quay.io/cellgeni/cellclusterer'
 
   publishDir "${params.outdir}/win_matrix", mode: 'link'
+
+  when: !params.stopatcluster
 
   output:
   file 'raw_window_bc_matrix.mmtx.gz'
@@ -611,6 +615,8 @@ process clusters_index {
 
   tag "${cladefile}"
 
+  when: !params.stopatcluster
+
   input:
   file metafile from ch_cellpaths_clusterindex.collectFile(name: 'cov.inputs', newLine: true)
   file cladefile from ch_clustering
@@ -661,6 +667,8 @@ process clusters_macs2 {
   container = 'fooliu/macs2'
 
   publishDir "${params.outdir}/macs2", mode: 'link'
+
+  when: !params.stopatcluster
 
   input:
   set val(clustag), file(clusregionfile) from ch_clustermacs
@@ -813,6 +821,7 @@ process make_master_peakmatrix {
 
   publishDir "${params.outdir}/peak_matrix", mode: 'link'
 
+  when: !params.stopatcluster
 
   input:
   file metafile from ch_cellpeak.flatMap { ls -> ls.collect{ it.toString() } }.collectFile(name: 'peak.inputs', newLine: true)

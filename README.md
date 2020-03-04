@@ -118,6 +118,19 @@ where `mux.txt` is a tab separated file that looks like this:
 ```
 
 The first column will be used to make the barcodes in each sample unique across the merged samples. As
-such it can be anything, but it is suggested to simply use a range of integers starting at 1.
+such it can be anything, but it is suggested to simply use a range of integers starting at 1, or to
+use the last one or two signficant digits of the sample ID provided they are unique to each sample.
 
+The cellranger output directories need not contain the full output. Currently the pipeline expects
+these files:
+
+```
+fragments.tsv.gz  possorted_bam.bam singlecell.csv
+```
+
+When running multiple samples, the bam file is only used for its header. It is possible to
+substitute the original bam file with the output of `samtools view -H possorted_bam.bam`. This can
+be useful if it is necessary to copy the data prior to running this pipeline; it is not necessary
+in this case to copy the full position sorted bam file (they tend to be very large).
+Currently it is necessary that the substituted file has the same name `possorted_bam.bam`.
 

@@ -37,7 +37,6 @@ Sanger Cellular Genetics ATAC-seq pipeline by Luz Garcia Alonso, Ni Huang and St
 --perclusterpeaks false [default] computer per-cluster cell/peak matrix  
                             Note both can be set to true.
 
---ncell 0               [default] set e.g. to 1000 to test-run smaller number of cells
 --cellbatchsize 500     [default] parallelisation bucket size (number of cells per bucket)
 --nclades 10            [default] number of clusters to use
 
@@ -78,11 +77,18 @@ nextflow run $source        \
   -config my.config
 ```
 
-where `my.config` is used to mount the file location where the input data is stored, e.g.
+where `my.config` supplies singularity mount options and tells nextflow how many CPUs it can utilise
+when using the local executor, e.g.
 
 ```
 singularity {
   runOptions = '-B /some/path1 -B /another/path2'
+	cacheDir = '/home/jovyan/singularity/'
+}
+
+executor {
+    cpus   = 56
+    memory = 600.GB
 }
 ```
 

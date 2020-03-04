@@ -54,7 +54,7 @@ sub read_win_stats {
 my %gtab = reverse %{read_key_val($fgenometab)};
 
 my $n_windows = scalar keys %gtab;
-$n_windows_required = $n_windows if $n_windows_required > $n_windows;
+$n_windows_required = $n_windows if $n_windows_required > $n_windows || $n_windows_required < 0;
 
   ## Read sample matrix top windows based on #cells with that window
   ## The stored value is the rank based on the same.

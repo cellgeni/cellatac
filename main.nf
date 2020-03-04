@@ -17,6 +17,7 @@ params.nbcest        =  10000           // estimated number of non-empty barcode
 params.nclades       =  10
 params.ntfs          =  20000
 params.npcs          =  20
+params.sumrank		   =  'false'
 
 params.mermul        =  false
 params.usecls        =  '__seurat__'
@@ -24,7 +25,6 @@ params.mergepeaks    =  true
 params.perclusterpeaks  =  false
 
 params.muxfile       =  null
-params.devel         =  true
 
 if ((!params.fragments || !params.cellcsv || !params.posbam) && !params.muxfile) {
   exit 1, "Please supply --fragments <CR-fragment-file> --cellcsv <CR-cellcsv-file> --posbam <CR-posbam-file>"
@@ -50,7 +50,7 @@ thebamfile  = params.posbam    ? file(params.posbam)    : null
 
 
 def just_name(full_file_path) {
-  full_file_path.split('/')[-1]           // fixme: use generic path separator
+  full_file_path.toString().split('/')[-1]           // fixme: use generic path separator
 }
 
 process prepare_cr {
@@ -360,8 +360,38 @@ Need to create these outputs, as they are currently hardcoded in seurat script (
 
   shell:
   '''
-  ca_winsect.pl !{ntfs} !{wintab} !{win} > __win.stats
-  cut -f 1,2 __win.stats | sort -nk 1 > window.tab
+  ## ca_winsect rank-transforms the data.
+  ca_winsect.pl -1 !{wintab} !{win} > __winsel.stats
+
+	# All approaches: use ranks to mitigate sample-level expression differences.
+
+			# first approach: sum ranks, take top N lowest sumrank windows.
+			# This implies taking windows with high expression across samples.
+  if !{params.sumrank}; then
+    cut -f 1,2 __winsel.stats | head -n !{ntfs} | sort -nk 1 > window.tab
+  else
+		# Second approach try to find windows that are variably expressed.
+		# We use IQR approach (on the ranks) skewed towards the higher expressed (== lower rank) windows.
+		# This is experimental code. Will be either removed or made clean.
+  R --no-save <<EOC
+	wintab <- read.table("!{wintab}", as.is=T, colClasses=c("character", "character"))
+
+	N <- !{ntfs}
+	rd <- read.table("winsect.stats", header=T, row.names=1, as.is=T)				# rank data
+	sumrank <- rd[, "Sumrank"]
+	names(sumrank) <- rownames(rd)
+	srk_names <- names(sort(sumrank))[1:N]
+	rd2 <- rd[,-1]			    # remove sumrank column
+	rd2[rd2 > 2*N] <- 2*N		# truncate counts at 2N; to avoid high-rank windows dominating; point of interest/debate
+													# Given skewed quantile this probably does not have any impact.
+	win_choice <- apply(rd2, 1, function (x) { quantile(x, 0.3) - quantile(x, 0.05) })
+													# 0.25 quantile width ~ about a quarter of samples.
+	iqr2_names <- names(sort(win_choice, decreasing=TRUE))[1:N]
+	sum(srk_names %in% iqr2_names)
+	write.table(wintab[ wintab[,"V2"] %in% iqr2_names, ], "window.tab", quote=F, row.names=F, col.names=F, sep="\t")
+	EOC
+  fi
+
   for m in !{w2c}; do
     # input has format <tag>.w2c.mcx
     subfile=__${m%.w2c.mcx}.sub.mcx
@@ -662,11 +692,7 @@ process peaks_make_masterlist {
 
   publishDir "${params.outdir}/peaks", mode: 'link'
 
-              // fixme bugme
-              // why do I need below params.devel? make small test case with similar process logic.
-              // ch_combine_clusterpeaks seems to send empty file set, but its process clusters_macs2 should not run at all.
-
-  when: params.mergepeaks && !params.devel
+  when: params.mergepeaks
 
   input:
   file np_files from ch_combine_clusterpeaks.map { it[1] }.toSortedList { just_name(it) }

@@ -16,8 +16,9 @@ params.winsize       =  5000            // bin size for genome
 params.nbcest        =  10000           // estimated number of non-empty barcodes.
 params.nclades       =  10
 params.ntfs          =  20000
+params.ntfs_ofs      =  1
 params.npcs          =  20
-params.sumrank		   =  'false'
+params.sumrank		   =  'true'
 
 params.mermul        =  false
 params.usecls        =  '__seurat__'
@@ -348,6 +349,7 @@ process join_sample_matrix {
   file(wintab) from ch_wintab4.collect()
   file(celltab) from ch_celltab5.collect()
   val ntfs      from  params.ntfs
+  val ntfs_ofs  from  params.ntfs_ofs
 
   output:
   file('mmtx') into ch_load_mmtx2
@@ -369,7 +371,7 @@ Need to create these outputs, as they are currently hardcoded in seurat script (
 			# first approach: sum ranks, take top N lowest sumrank windows.
 			# This implies taking windows with high expression across samples.
   if !{params.sumrank}; then
-    cut -f 1,2 __winsel.stats | head -n !{ntfs} | sort -nk 1 > window.tab
+    ( set +o pipefail; cut -f 1,2 __winsel.stats | tail -n +!{ntfs_ofs} | head -n !{ntfs} | sort -nk 1 ) > window.tab
   else
 		# Second approach try to find windows that are variably expressed.
 		# We use IQR approach (on the ranks) skewed towards the higher expressed (== lower rank) windows.

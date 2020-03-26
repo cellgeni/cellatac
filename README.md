@@ -39,8 +39,8 @@ There are two relevant steps in the pipeline:
 --mermul true           merge multiplets using CR bam file
 --mermul false          [default] use CR fragments.tsv.gz
 
---usecls __seurat__        [default] custom approach resembling ...
---usecls __cusanovich__    use cusanovich approach
+--usecls __seurat__        [default] use Seurat/Signac approach resembling Cusanovich. It uses Louvain clustering instead.
+--usecls __cusanovich__    use cusanovich-strict approach. It uses bi-clustering of cells and windows based on cosine distances using the ward algorithm.
 --usecls <filename>        use custom clustering
 
 --mergepeaks true       [default] merge cluster peaks, compute master cell/peak matrix
@@ -48,8 +48,7 @@ There are two relevant steps in the pipeline:
                             Note both can be set to true.
 
 --cellbatchsize 500     [default] parallelisation bucket size (number of cells per bucket)
---nclades 10            [default] number of clusters to use
-
+--nclades 10            [default] number of clusters to use (only applies to cusanovich-strict approach)
 --sampleid <tag>        use <tag> in naming outputs. Not yet consistently applied
 ```
 

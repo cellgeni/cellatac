@@ -1,4 +1,16 @@
 
+
+
+when: in join_muxfiles behaving weirdly; should prevent running in single-sample mode.
+should already be prevented by parent process in fact.
+further debug.
+
+singlecell.csv: seurat now wants a tab separated file. so give it that.
+
+ca_seurat_*.R: give it option for single-sample case so we don't get crazy legend.
+
+
+
 cells_masterlist_coverage
   creates a lot of mp.bed files, but it could create just a single file, don't think
   individual files are needed.

@@ -37,9 +37,9 @@ ch_usercls = params.usecls =~ /^__.*__$/ ? Channel.empty() : Channel.fromPath(pa
 ch_mux     = params.muxfile && !params.mermul ? Channel.fromPath(params.muxfile) : Channel.empty()
 
 
-ch_cellfile = params.cellcsv    ? Channel.From(params.cellcsv)   : Channel.empty()
-ch_fragfile_cr = params.fragments  ? Channel.From(params.fragments) : Channel.empty()
-ch_bamfile  = params.posbam     ? Channel.From(params.posbam)    : Channel.empty()
+ch_cellfile = params.cellcsv    ? Channel.fromPath(params.cellcsv)   : Channel.empty()
+ch_fragfile_cr = params.fragments  ? Channel.fromPath(params.fragments) : Channel.empty()
+ch_bamfile  = params.posbam     ? Channel.fromPath(params.posbam)    : Channel.empty()
 
 ch_cellfile.into { ch_cellfile_mm; ch_cellfile_cr; ch_cellfile_seurat }
 ch_bamfile.into  { ch_bamfile_mm; ch_bamfile_cr }
@@ -73,7 +73,7 @@ process prepare_cr {
   file('cellmetadata/cells.tab')    into ch_celltab_cr
   file('cellmetadata/win.tab')      into ch_wintab_cr
   file('cellmetadata/sample.chrlen')    into ch_chrom_length_cr
-  set val("cr"), file('c_c.*') into ch_demux_cr
+  set val("crsingle"), file('c_c.*') into ch_demux_cr
 
   shell:
   filter = params.ncell > 0 ? "head -n ${params.ncell}" : "cat"
@@ -227,7 +227,16 @@ process prepare_mm {        // merge multiplets
 
 process join_muxfiles {
 
+// todo fixme this process is activated somehow in single-sample mode,
+// even with a draconian `when: false` directive.
+// it then sends a tab file and this leads to disaster.
+// Need to understand `when` + process triggering (asked Paolo about that once).
+// IIRC the issue then was a child or grandchild popping up unexpectedly.
+// In this case join_muxfiles is the (grand)child.
+
   publishDir "${params.outdir}/cellmetadata", pattern: 'singlecell.tsv',   mode: 'link'
+
+  when: false
 
   input:
   file(fnames) from ch_cellnames_many_cr.toSortedList { just_name(it) }
@@ -241,7 +250,7 @@ process join_muxfiles {
   '''
   cat !{fnames} > merged.names
   nl -v0 -nln -w1 < merged.names > merged.tab
-
+true
   echo -e "barcode\\ttotal\\tduplicate\\tchimeric\\tunmapped\\tlowmapq\\tmitochondrial\\tpassed_filters\\tcell_id\\tis__cell_barcode\\tTSS_fragments\\tDNase_sensitive_region_fragments\\tenhancer_region_fragments\\tpromoter_region_fragments\\ton_target_fragments\\tblacklist_region_fragments\\tpeak_region_fragments\\tpeak_region_cutsites" > singlecell.tsv
   cat !{fninfo} >> singlecell.tsv
   '''
@@ -270,7 +279,7 @@ process join_muxfiles {
     .mix(ch_chrom_length_cr, ch_chrom_length_mm)
     .into { ch_chrom_length; ch_chrom_length2; ch_chrom_length3 }
 
-  ch_fragfile_cr.map { fragf -> [ "cr", fragf ] }
+  ch_fragfile_cr.map { fragf -> [ "crsingle", fragf ] }
     .join(ch_demux_cr)
     .mix(ch_demux_mm, ch_demux_many_cr)           // fixme this block is a bit convoluted
     .transpose()
@@ -292,13 +301,14 @@ process sample_demux {
 
   shell:
   batchtag = cells.toString() - 'c_c.'
+  thesampletag = sampletag
   '''
   dir=celldata
-  if [[ -n "!{sampletag}" ]]; then
-    dir=!{sampletag}-celldata
+  if [[ -n "!{thesampletag}" ]]; then
+    dir=!{thesampletag}-celldata
   fi
   mkdir -p $dir
-  zcat !{frags} | samdemux.pl --barcodefile=!{cells} --outdir=$dir --bucket --fragments --ntest=0 --fnedges=mtx.!{sampletag}-!{batchtag}.edges --tag=!{sampletag}
+  zcat !{frags} | samdemux.pl --barcodefile=!{cells} --outdir=$dir --bucket --fragments --ntest=0 --fnedges=mtx.!{thesampletag}-!{batchtag}.edges --tag=!{thesampletag}
   '''
 }
 

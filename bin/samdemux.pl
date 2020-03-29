@@ -80,6 +80,8 @@ if
       exit(1);
    }
 
+print STDERR "Single sample mode triggered by tag $sampletag\n" if $sampletag eq 'crsingle';
+
 if (!$n_args || $help) {
    help();
    exit(0);
@@ -179,7 +181,7 @@ while (<>) {
                         # todo? read tab file to check region code exists.
     $region_code = $chr . '_' . $index;
     $bc = $mybc;
-    if ($sampletag) {
+    if ($sampletag ne 'crsingle') {
       my $printbc = "$sampletag-$bc";
       s/\t$bc/\t$printbc/;
     }
@@ -189,7 +191,7 @@ while (<>) {
     next;
   }
 
-  my $printbc = $sampletag ? "$sampletag-$bc" : $bc;
+  my $printbc = $sampletag ne 'crsingle' ? "$sampletag-$bc" : $bc;
   my $cache = $cache{$printbc} || next;           # ignore filtered barcodes.
   $N_READ++;
 

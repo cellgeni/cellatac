@@ -2,6 +2,9 @@ library(Signac)
 library(Seurat)
 library('Matrix')
 
+theargs <- R.utils::commandArgs(asValues=TRUE)
+have_multisample  <- is.null(theargs$"single-sample")
+
 ### NOTE/check: make sure CR singlecell.csv table works as expected if we merge multiplets ourselves
 
 # cell.names  filtered_cell.stats  filtered_window_bc_matrix.mmtx.gz  regions.names  win.stats
@@ -65,11 +68,13 @@ so <- FindNeighbors(object = so, reduction = 'lsi', dims = 1:30)
 so <- FindClusters(object = so, verbose = FALSE)
 
 ### Plot clustering and sample information
-so@meta.data$sample_id = sapply(strsplit(colnames(so), split = '-'), head, 1)
 
 pdf('seurat.pdf')
 DimPlot(object = so, label = TRUE) + NoLegend()
-DimPlot(object = so, label = TRUE, group.by="sample_id")
+if (have_multisample) {
+  so@meta.data$sample_id = sapply(strsplit(colnames(so), split = '-'), head, 1)
+  DimPlot(object = so, label = TRUE, group.by="sample_id")
+}
 dev.off()
 
 # Save file

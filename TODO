@@ -7,7 +7,20 @@ further debug.
 
 singlecell.csv: seurat now wants a tab separated file. so give it that.
 
-ca_seurat_*.R: give it option for single-sample case so we don't get crazy legend.
+
+In various (sibling - preparation) places the chromosomes are grepped with
+  grep -i 'chr[a-z0-9][a-z0-9]*\\>'
+(1) document / option / reconsider
+(2) When running plate data through cellatac, we needed to restrict edges to those chromosomes,
+so used -restrict-tab in mcxload rather  than -strict-tab.
+
+Next; we use mcxload in both make_sample_matrix and make_big_matrix. I presume the
+tab files are identical --  code-document what these are respectively
+so it's easier to reason.
+
+  make_sample_matrix active in single mode; check.
+fraggit.sh initially created wrongly sorted chromosome name file (due to bedtools sort no less).
+This led to some of the code additions/changes.
 
 
 

@@ -80,14 +80,16 @@ process prepare_cr {
   '''
   mkdir -p cellmetadata
 # Chrosome length file.
-  samtools view -H !{posbam}  \\
+  samtools view -H !{posbam}   \\
     | grep '@SQ'$'\\t''SN:'    \\
     | perl -ne '/\\bSN:(\\S+)/ && ($name=$1); /\\bLN:(\\d+)/ && ($len=$1); print "$name\\t$len\\n";' \\
-    | uniq                    \\
+    | uniq                     \\
+    | grep -i 'chr[a-z0-9][a-z0-9]*\\>' \\
     > cellmetadata/sample.chrlen
+        # grep -> WARNING DANGERSIGN fixme (see other locations)
 
 # Names + info of selected cells.
-  perl -F, -ane 's/,/\t/g; print if $F[9] == 1' !{f_cells} \\
+  cat !{f_cells} | tr ',' '\\t' | perl -ane 'print if $F[9] == 1' \\
      | (sort -rnk 2 || true) | !{filter} > cellmetadata/chosen_cells.info
 
 # Just the names of selected cells. 
@@ -147,8 +149,11 @@ process prepare_cr_mux {     // integrate multiple fragment files
   samtools view -H $bamfile  \\
     | grep '@SQ'$'\\t''SN:'    \\
     | perl -ne '/\\bSN:(\\S+)/ && ($name=$1); /\\bLN:(\\d+)/ && ($len=$1); print "$name\\t$len\\n";' \\
+    | grep -i 'chr[a-z0-9][a-z0-9]*\\>' \\
     | uniq                    \\
     > cellmetadata/!{sampletag}-sample.chrlen
+        # grep -> WARNING DANGERSIGN fixme (see other locations)
+
 # Tab file for windows
   ca_make_chromtab.pl !{winsize} cellmetadata/!{sampletag}-sample.chrlen > cellmetadata/!{sampletag}-win.tab
 
@@ -342,7 +347,7 @@ process make_sample_matrix {
   export MCLXIOFORMAT=8
 	mtx=!{sampleid}.c2w.mcx
   mtxtp=!{sampleid}.w2c.mcx
-  cat !{fnedges} | mcxload --stream-split -abc - -strict-tabc allcelltab -strict-tabr wintab --write-binary -o $mtx
+  cat !{fnedges} | mcxload --stream-split -abc - -strict-tabc allcelltab -restrict-tabr wintab --write-binary -o $mtx
   mcxi /$mtx lm tp /$mtxtp wm
   mcx query -imx $mtxtp -tab wintab | tail -n +2 > !{sampleid}.stats
   '''
@@ -461,7 +466,7 @@ process make_big_matrix {
 
   shell:
   '''
-  cat !{all_edges} | mcxload --stream-split -abc - -strict-tabc !{celltab} -strict-tabr !{wintab} --write-binary -o cell2win.mcx
+  cat !{all_edges} | mcxload --stream-split -abc - -strict-tabc !{celltab} -restrict-tabr !{wintab} --write-binary -o cell2win.mcx
   sleep 3
   '''
 }
@@ -667,7 +672,7 @@ process clusters_merge_inputs {
   shell:
   '''
   cut -f 2 !{clusmetafile} | tr '\\n' '\\0' > clusmetafile0
-  sort -m -k 1,1V -k 2,2n --files0-from=clusmetafile0 | perl -pe 'chomp;$_.="\\t+\\n";' > cluster.!{clustag}.bed
+  sort -m -k 1,1V -k 2,2n -k 3,3n --files0-from=clusmetafile0 | perl -pe 'chomp;$_.="\\t+\\n";' > cluster.!{clustag}.bed
   '''
 }
 
@@ -762,9 +767,11 @@ process cells_masterlist_coverage {
   shell:
   '''
   while read cellname celldef; do
+celldef2=ttt.$cellname
+sort -k 1,1V -k 2,2n -k 3,3,n $celldef > celldef2
     bedtools coverage               \\
     -a !{masterbed_sps}             \\
-    -b $celldef -sorted -header     \\
+    -b $celldef2 -sorted -header     \\
     -g !{sample_chrlen} | awk -F"\t" '{if($4>0) print $0}' > $cellname.mp.txt
   done < !{celldef_list}
   '''
@@ -799,7 +806,7 @@ process make_subset_peakmatrix {
     > !{clustag}.macs2-empty
     exit 0
   fi
-  cut -f 1-3 !{npeakfile} | sort -k1,1 -k2,2n > clusterpeak.bed
+  cut -f 1-3 !{npeakfile} | sort -k1,1 -k2,2n -k 3,3n > clusterpeak.bed
 
   bedtools sort -faidx !{sample_chrlen} -i clusterpeak.bed > clusterpeak_sps.bed
           # ^ similar to peaks_makemasterlist; we only need the selection of columns and sorting

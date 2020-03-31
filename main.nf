@@ -83,8 +83,9 @@ process prepare_cr {
   samtools view -H !{posbam}   \\
     | grep '@SQ'$'\\t''SN:'    \\
     | perl -ne '/\\bSN:(\\S+)/ && ($name=$1); /\\bLN:(\\d+)/ && ($len=$1); print "$name\\t$len\\n";' \\
-    | uniq                     \\
     | grep -i 'chr[a-z0-9][a-z0-9]*\\>' \\
+    | sort -k 1,1V -k 2,2n     \\
+    | uniq                     \\
     > cellmetadata/sample.chrlen
         # grep -> WARNING DANGERSIGN fixme (see other locations)
 
@@ -146,11 +147,12 @@ process prepare_cr_mux {     // integrate multiple fragment files
   mkdir -p cellmetadata
 
 # Chrosome length file.
-  samtools view -H $bamfile  \\
+  samtools view -H $bamfile    \\
     | grep '@SQ'$'\\t''SN:'    \\
     | perl -ne '/\\bSN:(\\S+)/ && ($name=$1); /\\bLN:(\\d+)/ && ($len=$1); print "$name\\t$len\\n";' \\
     | grep -i 'chr[a-z0-9][a-z0-9]*\\>' \\
-    | uniq                    \\
+    | sort -k 1,1V -k 2,2n     \\
+    | uniq                     \\
     > cellmetadata/!{sampletag}-sample.chrlen
         # grep -> WARNING DANGERSIGN fixme (see other locations)
 
@@ -198,10 +200,12 @@ process prepare_mm {        // merge multiplets
   '''
   mkdir -p cellmetadata
 # Chrosome length file.
-  samtools view -H !{posbam}  \\
+  samtools view -H !{posbam}   \\
     | grep '@SQ'$'\\t''SN:'    \\
     | perl -ne '/\\bSN:(\\S+)/ && ($name=$1); /\\bLN:(\\d+)/ && ($len=$1); print "$name\\t$len\\n";' \\
-    | uniq | sort -V           \\
+    | grep -i 'chr[a-z0-9][a-z0-9]*\\>' \\
+    | sort -k 1,1V -k 2,2n     \\
+    | uniq
     > cellmetadata/sample.chrlen.all
 
 # get the main chromosomes. WARNING DANGERSIGN very crude regular expression filter.
@@ -730,7 +734,7 @@ process peaks_make_masterlist {
     // NOTE may want to encode some cluster parameters in the file name? Also preceding processes
   shell:
   '''
-  cat !{np_files} | cut -f 1-3 | sort -k1,1 -k2,2n > allclusters_peaks_sorted.bed
+  cat !{np_files} | cut -f 1-3 | sort -k1,1 -k2,2n -k3,3n > allclusters_peaks_sorted.bed
   # use -d -1 to avoid mergeing regions overlapping only 1bp
   bedtools merge -i allclusters_peaks_sorted.bed -d -1 > allclusters_masterlist.bed
 
@@ -767,11 +771,11 @@ process cells_masterlist_coverage {
   shell:
   '''
   while read cellname celldef; do
-celldef2=ttt.$cellname
-sort -k 1,1V -k 2,2n -k 3,3,n $celldef > celldef2
+# celldef2=ttt.$cellname
+# sort -k 1,1V -k 2,2n -k 3,3n $celldef > celldef2
     bedtools coverage               \\
     -a !{masterbed_sps}             \\
-    -b $celldef2 -sorted -header     \\
+    -b $celldef -sorted -header     \\
     -g !{sample_chrlen} | awk -F"\t" '{if($4>0) print $0}' > $cellname.mp.txt
   done < !{celldef_list}
   '''

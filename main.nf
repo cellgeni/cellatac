@@ -160,7 +160,7 @@ process prepare_cr_mux {     // integrate multiple fragment files
   ca_make_chromtab.pl !{winsize} cellmetadata/!{sampletag}-sample.chrlen > cellmetadata/!{sampletag}-win.tab
 
 # Names + info of selected cells.
-  perl -F, -ane 's/,/\t/g; print "!{sampletag}-$_" if $F[9] == 1' $cellfile \\
+  perl -F, -ane 's/,/\t/g; print "!{sampleid}-$_" if $F[9] == 1' $cellfile \\
      | (sort -rnk 2 || true) | !{filter} > cellmetadata/!{sampleid}.info
 
 # Just the names of selected cells. 
@@ -242,10 +242,10 @@ process join_muxfiles {
 // Need to understand `when` + process triggering (asked Paolo about that once).
 // IIRC the issue then was a child or grandchild popping up unexpectedly.
 // In this case join_muxfiles is the (grand)child.
+// when: false
 
   publishDir "${params.outdir}/cellmetadata", pattern: 'singlecell.tsv',   mode: 'link'
 
-  when: false
 
   input:
   file(fnames) from ch_cellnames_many_cr.toSortedList { just_name(it) }
@@ -514,7 +514,7 @@ process filter_big_matrix {
   publishDir "$params.outdir/win_matrix", mode: 'link', pattern: 'other_publish/filtered*',
     saveAs: { fname -> fname - ~/other_publish\// }
 
-  when: false
+//when: false
 
   input:
   file('cells.tab') from ch_celltab2

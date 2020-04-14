@@ -1,11 +1,14 @@
 
+single-sample (turn off sample-colouring of pdf) is an option in bin/ca_seurat_clades.R
+but not present in main.nf
+something fell throught the cracks.
 
 
 when: in join_muxfiles behaving weirdly; should prevent running in single-sample mode.
 should already be prevented by parent process in fact.
 further debug.
 
-singlecell.csv: seurat now wants a tab separated file. so give it that.
+
 
 
 In various (sibling - preparation) places the chromosomes are grepped with

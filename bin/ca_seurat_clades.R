@@ -4,6 +4,7 @@ library('Matrix')
 
 theargs <- R.utils::commandArgs(asValues=TRUE)
 have_multisample  <- is.null(theargs$"single-sample")
+do_clip <- is.null(theargs$noclip)      # with contortion apologies.
 
 ### NOTE/check: make sure CR singlecell.csv table works as expected if we merge multiplets ourselves
 
@@ -51,12 +52,17 @@ so <- FindTopFeatures(so, min.cutoff = 'q0')
 # We next run a singular value decomposition (SVD) on the TD-IDF normalized matrix, 
 # using the features (peaks) selected above. 
 # This returns a low-dimensional representation of the object.
+
+clipvalue = 1.5 # If we want to clip to reproduce Cusanovich approach.
+if (!do_clip) {
+  clipvalue = NULL
+}
 so <- RunSVD(
   object = so,
   assay = 'peaks',
   reduction.key = 'LSI_',
   reduction.name = 'lsi',
-  scale.max = 1.5, # If we want to clip to reproduce Cusanovich approach.
+  scale.max = clipvalue,
   fastpath=FALSE
 )
 

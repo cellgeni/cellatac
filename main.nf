@@ -19,6 +19,7 @@ params.ntfs          =  20000
 params.ntfs_ofs      =  1
 params.npcs          =  20
 params.sumrank		   =  'true'
+params.clip_SVD      =  true
 
 params.mermul        =  false
 params.usecls        =  '__seurat__'
@@ -160,7 +161,7 @@ process prepare_cr_mux {     // integrate multiple fragment files
   ca_make_chromtab.pl !{winsize} cellmetadata/!{sampletag}-sample.chrlen > cellmetadata/!{sampletag}-win.tab
 
 # Names + info of selected cells.
-  perl -F, -ane 's/,/\t/g; print "!{sampleid}-$_" if $F[9] == 1' $cellfile \\
+  perl -F, -ane 's/,/\t/g; print "!{sampletag}-$_" if $F[9] == 1' $cellfile \\
      | (sort -rnk 2 || true) | !{filter} > cellmetadata/!{sampleid}.info
 
 # Just the names of selected cells. 
@@ -576,8 +577,9 @@ process seurat_clustering {
   file('seurat*.rds')
 
   shell:
+  noclip = params.clip_SVD ? "" : "--noclip"
   '''
-  R --no-save < !{baseDir}/bin/ca_seurat_clades.R
+  R --no-save !{noclip} < !{baseDir}/bin/ca_seurat_clades.R
   #ln -s !{baseDir}/bin/cusanovich2018_lib.r .
   #R --slave --quiet --no-save --args  \\
   #--nclades=!{nclades}                \\

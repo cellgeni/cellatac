@@ -6,7 +6,7 @@ Sanger Cellular Genetics ATAC-seq pipeline by Luz Garcia Alonso, Ni Huang and St
 
 There are two relevant steps in the pipeline:
  - **Multiplets identification (optional)**. Cell Ranger ATAC 1.2 identifies [multiplets](https://www.nature.com/articles/s41467-020-14667-5), selects the "dominant" barcode in the multiplet and removes the rest. We think all barcodes from a multiplet should be aggregated to avoid losing data. **cellatac** uses an alternative approach to identify these multiplets and aggregates them. Code courtesy of Ni Huang.
-- **Accessible chromatin peak calling**. Cell Ranger ATACC identifies the peaks by aggregating the signal of all the barcodes in the sample. There are some papers reporting that this may be unsuitable to detect peaks appearing in rare cell types/states. **cellatac** uses [Cusanovich approach](https://www.sciencedirect.com/science/article/pii/S0092867418308559) to increase the peak detection sensitivity by, first, identifying cell clusters on a windows x cell rather than peaks per cell matrix, and then doing a peak calling for each cluster. 
+- **Accessible chromatin peak calling**. Cell Ranger ATAC identifies the peaks by aggregating the signal of all the barcodes in the sample. There are some papers reporting that this may be unsuitable to detect peaks appearing in rare cell types/states. **cellatac** uses [Cusanovich approach](https://www.sciencedirect.com/science/article/pii/S0092867418308559) to increase the peak detection sensitivity by, first, identifying cell clusters on a windows x cell rather than peaks per cell matrix, and then doing a peak calling for each cluster. 
 
 ### Basic workflow
 

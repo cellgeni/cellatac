@@ -128,7 +128,7 @@ where `mux.txt` is a tab separated file that looks like this:
 
 The first column will be used to make the barcodes in each sample unique across the merged samples. As
 such it can be anything, but it is suggested to simply use a range of integers starting at 1, or to
-use the last one or two signficant digits of the sample ID provided they are unique to each sample.
+use the last one or two significant digits of the sample ID provided they are unique to each sample.
 
 The cellranger output directories need not contain the full output. Currently the pipeline expects
 these files:

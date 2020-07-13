@@ -1,4 +1,13 @@
 
+D O C U M E N T
+
+sc -> fraggit.sh
+how did I make singlecell.csv? pbb by hand.
+
+publish command line, state
+
+is ntfs_ofs still active?
+
 single-sample (turn off sample-colouring of pdf) is an option in bin/ca_seurat_clades.R
 but not present in main.nf
 something fell throught the cracks.

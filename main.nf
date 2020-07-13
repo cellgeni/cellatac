@@ -21,13 +21,13 @@ params.npcs          =  20
 params.sumrank		   =  'true'
 params.clip_SVD      =  true
 
-params.mermul        =  false
+params.mermul        =  false           // merge multiplets; only supported for single samples
 params.usecls        =  '__seurat__'
 params.mergepeaks    =  true
 params.perclusterpeaks  =  false
 params.stopatcluster =  false
 
-params.muxfile       =  null
+params.muxfile       =  null            // analyse multiple samples
 
 if ((!params.fragments || !params.cellcsv || !params.posbam) && !params.muxfile) {
   exit 1, "Please supply --fragments <CR-fragment-file> --cellcsv <CR-cellcsv-file> --posbam <CR-posbam-file>"

@@ -115,9 +115,9 @@ process prepare_cr_mux {     // integrate multiple fragment files
 
   container 'quay.io/cellgeni/cellclusterer'
 
-  when: !params.mermul && !params.posbam
-
   publishDir "${params.outdir}", pattern: 'cellmetadata',   mode: 'copy'
+
+  when: !params.mermul && !params.posbam
 
   input:
   set val(sampletag), val(sampleid), val(root) from ch_mux
@@ -362,10 +362,12 @@ process make_sample_matrix {
 process join_sample_matrix {
 
   container 'quay.io/cellgeni/cellclusterer'
+
+  publishDir "${params.outdir}/win_matrix", pattern: 'window.tab',  mode: 'link'
  
   input:
   file(w2c) from ch_sample_join_matrix.toSortedList { just_name(it) }
-  file(win) from ch_sample_join_window.toSortedList { just_name(it) }
+  file(winstats) from ch_sample_join_window.toSortedList { just_name(it) }
   file(wintab) from ch_wintab4.collect()
   file(celltab) from ch_celltab5.collect()
   val ntfs      from  params.ntfs
@@ -373,6 +375,7 @@ process join_sample_matrix {
 
   output:
   file('mmtx') into ch_load_mmtx2
+  file('window.tab')
 
 /*
 Need to create these outputs, as they are currently hardcoded in seurat script (fixme).
@@ -384,7 +387,7 @@ Need to create these outputs, as they are currently hardcoded in seurat script (
   shell:
   '''
   ## ca_winsect rank-transforms the data.
-  ca_winsect.pl -1 !{wintab} !{win} > __winsel.stats
+  ca_winsect.pl -1 !{wintab} !{winstats} > __winsel.stats
 
 	# All approaches: use ranks to mitigate sample-level expression differences.
 

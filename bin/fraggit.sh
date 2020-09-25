@@ -5,8 +5,8 @@ set -euo pipefail
 samp=${1:?Need sample ID}
 export barc=${2:?Need barcode}
 
-dataroot=/home/jovyan/carlos/crams
-dest=/home/jovyan/carlos/frags
+dataroot=/fix/this/script
+dest=/fix/it/some/more
 
 samtools view -b -f 2 -F 512 -F 256 $dataroot/$samp.cram | \
   bedtools bamtobed       | \

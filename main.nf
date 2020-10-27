@@ -741,7 +741,8 @@ process peaks_make_masterlist {
   '''
   cat !{np_files} | cut -f 1-3 | sort -k1,1 -k2,2n -k3,3n > allclusters_peaks_sorted.bed
   # use -d -1 to avoid mergeing regions overlapping only 1bp
-  bedtools merge -i allclusters_peaks_sorted.bed -d -1 > allclusters_masterlist.bed
+  # use -d 0 (default) so that overlapping and/or book-ended features are merged.
+  bedtools merge -i allclusters_peaks_sorted.bed -d 0 > allclusters_masterlist.bed
 
   # Note moved this step from P6 to here. sps == sample-pos-sorted, sorted according to sample bam.
   bedtools sort -faidx !{sample_idxstats} -i allclusters_masterlist.bed > allclusters_masterlist_sps.bed

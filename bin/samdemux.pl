@@ -23,6 +23,8 @@ use Getopt::Long;
 my %files;           # hashes to file handles, handle is barcode.
 my %cache;           # buffer reads; flush once at certain size.
 my %count;           # count reads per barcode currently in cache.
+my %chrom;           # accepted chromosomes.
+my $n_chrom = 0;
 
 my $SIZE = 1000;     # cache size
 my $N_READ = 0;
@@ -33,7 +35,8 @@ my $n_args = @ARGV;
 
 my $help  =  0;
 my $progname = 'samdemux.pl';
-my $barcodefile = "";
+my $barcodefile = "no-such-file";
+my $chromofile = "";
 my $od = "demux-out";
 my $ntest = 0;
 my $bucket = 0;
@@ -52,6 +55,7 @@ Usage:
 Options:
 --help                  this
 --barcodefile=<FNAME>   file with barcodes
+--chromofile=<FNAME>    file with chromosome names
 --dir=<DIR>             directory
 --ntest=<NUM>           test on NUM reads (e.g. 1000000)
 --bucket                distribute the files across directory buckets
@@ -67,6 +71,7 @@ if
    (  "help"            =>   \$help
    ,  "ntest=i"         =>   \$ntest
    ,  "barcodefile=s"   =>   \$barcodefile
+   ,  "chromofile=s"    =>   \$chromofile
    ,  "outdir=s"        =>   \$od
    ,  "fnedges=s"       =>   \$fnedges
    ,  "bucket"          =>   \$bucket
@@ -124,6 +129,17 @@ sub flush_lines {
 
 open(BARCODES, '<', $barcodefile) || die "Cannot open barcode file $barcodefile";
 
+if ($chromofile) {
+  open(CHROMO, '<', $chromofile) || die "Cannot open chromosome file $chromofile";
+  %chrom = map { chomp; ($_, 1) } <CHROMO>;
+  close(CHROMO);
+  $n_chrom = keys %chrom;
+  print STDERR "Read $n_chrom chromosome names\n";
+  my @spaced = grep { /\s/ } keys %chrom;
+  local $" = '][';
+  die "White space in chromosome name(s) [@spaced]" if @spaced;
+}
+
 my $SUFFIX = $do_psb ? 'sam' : 'bed';
 
 while (<BARCODES>) {
@@ -167,6 +183,7 @@ while (<>) {
                          #    confirmed against a list of known-good barcode sequences 
 
   my ($bc, $region_code);
+  my $chr = "(no-chromosome)";
 
   if ($do_psb && m{\tCB:Z:(\S+)\b}) {
     $bc = $1;
@@ -175,12 +192,13 @@ while (<>) {
   elsif ($do_fragments) {
     my @F = split("\t");
     die "Field count error on line [$_]" unless @F == 5;
-    my ($chr, $start, $end, $mybc, $depth) = @F;
+    my ($frag_chr, $start, $end, $frag_bc, $depth) = @F;
     my $midpoint = $start + int(($end-$start-1)/2);
     my $index = $midpoint - ($midpoint % $winsize);
                         # todo? read tab file to check region code exists.
-    $region_code = $chr . '_' . $index;
-    $bc = $mybc;
+    $region_code = $frag_chr . '_' . $index;
+    $bc = $frag_bc;
+    $chr = $frag_chr;
     if ($sampletag ne 'crsingle') {
       my $printbc = "$sampletag-$bc";
       s/\t$bc/\t$printbc/;
@@ -193,6 +211,14 @@ while (<>) {
 
   my $printbc = $sampletag ne 'crsingle' ? "$sampletag-$bc" : $bc;
   my $cache = $cache{$printbc} || next;           # ignore filtered barcodes.
+
+  next if $n_chrom && !$chrom{$chr};              # Ignore unspecified chromosomes
+                                                  # Quite a few next things happening in this loop.
+                                                  # Chromosome check a later addition.
+                                                  # Caveat wrt counting and accounting,
+                                                  # and the different modes. Note that fragment mode
+                                                  # is the main branch of the code.
+
   $N_READ++;
 
   push @$cache, $_;

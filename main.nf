@@ -91,6 +91,7 @@ process prepare_cr {
         # grep -> WARNING DANGERSIGN fixme (see other locations)
 
 # Names + info of selected cells.
+# fixme '10th field (nine with zero-offset)' is very brittle; 
   cat !{f_cells} | tr ',' '\\t' | perl -ane 'print if $F[9] == 1' \\
      | (sort -rnk 2 || true) | !{filter} > cellmetadata/chosen_cells.info
 
@@ -161,6 +162,7 @@ process prepare_cr_mux {     // integrate multiple fragment files
   ca_make_chromtab.pl !{winsize} cellmetadata/!{sampletag}-sample.chrlen > cellmetadata/!{sampletag}-win.tab
 
 # Names + info of selected cells.
+# fixme '10th field (nine with zero-offset)' is very brittle; 
   perl -F, -ane 's/,/\t/g; print "!{sampletag}-$_" if $F[9] == 1' $cellfile \\
      | (sort -rnk 2 || true) | !{filter} > cellmetadata/!{sampleid}.info
 
@@ -287,7 +289,7 @@ true
 
   ch_chrom_length_many_cr.toSortedList { just_name(it) }.flatten().first()
     .mix(ch_chrom_length_cr, ch_chrom_length_mm)
-    .into { ch_chrom_length; ch_chrom_length2; ch_chrom_length3 }
+    .into { ch_chrom_length; ch_chrom_length2; ch_chrom_length3; ch_chrom_length4 }
 
   ch_fragfile_cr.map { fragf -> [ "crsingle", fragf ] }
     .join(ch_demux_cr)
@@ -302,6 +304,7 @@ process sample_demux {
 
   input:
   set val(sampletag), file(frags), file(cells) from ch_demux_batch.view{"sample_demux: $it"}
+  file(chromo) from ch_chrom_length4.collect()
 
   output:
   file('*celldata/[ACGT][ACGT][ACGT][ACGT]/*.bed') into ch_demuxed
@@ -318,7 +321,9 @@ process sample_demux {
     dir=!{thesampletag}-celldata
   fi
   mkdir -p $dir
-  zcat !{frags} | samdemux.pl --barcodefile=!{cells} --outdir=$dir --bucket --fragments --ntest=0 --fnedges=mtx.!{thesampletag}-!{batchtag}.edges --tag=!{thesampletag}
+  chromfile=my.!{sampletag}.chromo.txt
+  cut -f 1 !{chromo} > $chromfile
+  zcat !{frags} | samdemux.pl --chromofile=$chromfile --barcodefile=!{cells} --outdir=$dir --bucket --fragments --ntest=0 --fnedges=mtx.!{thesampletag}-!{batchtag}.edges --tag=!{thesampletag}
   '''
 }
 
@@ -739,7 +744,7 @@ process peaks_make_masterlist {
     // NOTE may want to encode some cluster parameters in the file name? Also preceding processes
   shell:
   '''
-  cat !{np_files} | cut -f 1-3 | sort -k1,1 -k2,2n -k3,3n > allclusters_peaks_sorted.bed
+  cat !{np_files} | cut -f 1-3 | sort -k1,1V -k2,2n -k3,3n > allclusters_peaks_sorted.bed
   # use -d -1 to avoid mergeing regions overlapping only 1bp
   # use -d 0 (default) so that overlapping and/or book-ended features are merged.
   bedtools merge -i allclusters_peaks_sorted.bed -d 0 > allclusters_masterlist.bed
@@ -816,7 +821,7 @@ process make_subset_peakmatrix {
     > !{clustag}.macs2-empty
     exit 0
   fi
-  cut -f 1-3 !{npeakfile} | sort -k1,1 -k2,2n -k 3,3n > clusterpeak.bed
+  cut -f 1-3 !{npeakfile} | sort -k1,1V -k2,2n -k 3,3n > clusterpeak.bed
 
   bedtools sort -faidx !{sample_chrlen} -i clusterpeak.bed > clusterpeak_sps.bed
           # ^ similar to peaks_makemasterlist; we only need the selection of columns and sorting

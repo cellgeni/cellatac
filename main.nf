@@ -42,8 +42,8 @@ ch_cellfile = params.cellcsv    ? Channel.fromPath(params.cellcsv)   : Channel.e
 ch_fragfile_cr = params.fragments  ? Channel.fromPath(params.fragments) : Channel.empty()
 ch_bamfile  = params.posbam     ? Channel.fromPath(params.posbam)    : Channel.empty()
 
-ch_cellfile.into { ch_cellfile_mm; ch_cellfile_cr; ch_cellfile_seurat }
-ch_bamfile.into  { ch_bamfile_mm; ch_bamfile_cr }
+ch_cellfile.into { ch_cellfile_param; ch_cellfile_param2; }
+ch_bamfile.into  { ch_bamfile_param; ch_bamfile_param2 }
 
 /*
 thefragfile = params.fragments ? file(params.fragments) : null
@@ -56,7 +56,7 @@ def just_name(full_file_path) {
   full_file_path.toString().split('/')[-1]           // fixme: use generic path separator
 }
 
-process prepare_cr {
+process prepare_cr_single {
 
   tag "cr-prep $cellbatchsize"
 
@@ -65,8 +65,8 @@ process prepare_cr {
   when: !params.mermul && !params.muxfile
 
   input:
-  file(f_cells) from ch_cellfile_cr.collect()
-  file(posbam) from ch_bamfile_cr.collect()
+  file(f_cells) from ch_cellfile_param.collect()
+  file(posbam) from ch_bamfile_param.collect()
   val cellbatchsize from params.cellbatchsize
   val winsize from params.winsize
 
@@ -74,6 +74,7 @@ process prepare_cr {
   file('cellmetadata/cells.tab')    into ch_celltab_cr
   file('cellmetadata/win.tab')      into ch_wintab_cr
   file('cellmetadata/sample.chrlen')    into ch_chrom_length_cr
+  file('cellmetadata/singlecell.tsv')   into ch_cellfile_single
   set val("crsingle"), file('c_c.*') into ch_demux_cr
 
   shell:
@@ -106,6 +107,11 @@ process prepare_cr {
 
 # Tab file for windows
   ca_make_chromtab.pl !{winsize} cellmetadata/sample.chrlen > cellmetadata/win.tab
+
+# Subselect what we need from singlecell.tsv file.
+# fixme brittle header/data coupling.
+  echo -e "barcode\\ttotal\\tduplicate\\tchimeric\\tunmapped\\tlowmapq\\tmitochondrial\\tpassed_filters\\tcell_id\\tis__cell_barcode\\tTSS_fragments\\tDNase_sensitive_region_fragments\\tenhancer_region_fragments\\tpromoter_region_fragments\\ton_target_fragments\\tblacklist_region_fragments\\tpeak_region_fragments\\tpeak_region_cutsites" > cellmetadata/singlecell.tsv
+  cat cellmetadata/chosen_cells.info >> cellmetadata/singlecell.tsv
   '''
 }
 
@@ -118,7 +124,7 @@ process prepare_cr_mux {     // integrate multiple fragment files
 
   publishDir "${params.outdir}", pattern: 'cellmetadata',   mode: 'copy'
 
-  when: !params.mermul && !params.posbam
+  when: (!params.mermul) && (!params.posbam) && (params.muxfile)
 
   input:
   set val(sampletag), val(sampleid), val(root) from ch_mux
@@ -176,6 +182,11 @@ process prepare_cr_mux {     // integrate multiple fragment files
 }
 
 
+
+/* fixme: this process also needs to provide a singlecell.csv file after changes
+ * to prepare_cr_single
+*/
+
 process prepare_mm {        // merge multiplets
 
   tag "mm-prep $cellbatchsize"
@@ -187,8 +198,8 @@ process prepare_mm {        // merge multiplets
   when: params.mermul && !params.muxfile
 
   input:
-  file(f_cells) from ch_cellfile_mm.collect()
-  file(posbam) from ch_bamfile_mm.collect()
+  file(f_cells) from ch_cellfile_param2.collect()
+  file(posbam) from ch_bamfile_param2.collect()
   val cellbatchsize from params.cellbatchsize
   val winsize from params.winsize
 
@@ -245,10 +256,12 @@ process join_muxfiles {
 // Need to understand `when` + process triggering (asked Paolo about that once).
 // IIRC the issue then was a child or grandchild popping up unexpectedly.
 // In this case join_muxfiles is the (grand)child.
-// when: false
+// Does toSortedList make it empty and acceptable?
+// fixme: I've duplicated the when: from prepare_cr_mux here, but need proper understanding.
 
   publishDir "${params.outdir}/cellmetadata", pattern: 'singlecell.tsv',   mode: 'link'
 
+  when: (!params.mermul) && (!params.posbam) && (params.muxfile)
 
   input:
   file(fnames) from ch_cellnames_many_cr.toSortedList { just_name(it) }
@@ -256,13 +269,13 @@ process join_muxfiles {
 
   output:
   file('merged.tab') into ch_celltab_manymerged_cr
-  file('singlecell.tsv') into ch_seurat_singlecellcsv
+  file('singlecell.tsv') into ch_cellfile_mux
 
   shell:
   '''
   cat !{fnames} > merged.names
   nl -v0 -nln -w1 < merged.names > merged.tab
-true
+# fixme brittle header/data coupling.
   echo -e "barcode\\ttotal\\tduplicate\\tchimeric\\tunmapped\\tlowmapq\\tmitochondrial\\tpassed_filters\\tcell_id\\tis__cell_barcode\\tTSS_fragments\\tDNase_sensitive_region_fragments\\tenhancer_region_fragments\\tpromoter_region_fragments\\ton_target_fragments\\tblacklist_region_fragments\\tpeak_region_fragments\\tpeak_region_cutsites" > singlecell.tsv
   cat !{fninfo} >> singlecell.tsv
   '''
@@ -273,9 +286,13 @@ true
    The merge-multiplet code was inserted in a clone of the preparation process.
    For further excitement, we also cater for merging multiple 10x experiments.
    below are all the merging Y-junctions for plumbing the channels to the same destination.
-      prepare_cr      -  pure cr code
-      prepare_mm      -  multiplet merging code
-      prepare_cr_mux  -  cr code supporting multiple experiments (not yet multipletted)
+      prepare_cr_single   -  pure cr code
+      prepare_mm          -  multiplet merging code
+      prepare_cr_mux      -  cr code supporting multiple experiments (not yet multipletted)
+   In these three processes there is quite a bit of duplication of code.
+     prepare_cr_mux is the main input mode;
+     for now prepare_cr_single is also maintained;
+     prepare_mm was tested a few times but not heavily used (cannot be used in mux mode).
 */
 
   ch_celltab_manymerged_cr
@@ -576,7 +593,7 @@ process seurat_clustering {
   val nclades   from  params.nclades
   val sampleid  from  params.sampleid
   val npcs      from  params.npcs
-  file('singlecell.csv') from ch_cellfile_seurat.mix(ch_seurat_singlecellcsv).collect()
+  file('singlecell.csv') from ch_cellfile_single.mix(ch_cellfile_mux).collect()
   file('mmtx') from ch_load_mmtx2
 
   output:

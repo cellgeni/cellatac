@@ -40,7 +40,7 @@ sub read_win_stats {
   ## Make sure that all sets are fully defined on the full tab file,
   ## so that sum-of-rank makes sense.
 
-  for my $k (sort { $set->{$b} <=> $set->{$a} } keys %$set) {
+  for my $k (sort { $set->{$b} <=> $set->{$a} || $a cmp $b } keys %$set) {
     $out_ranked{$k} = $i;
     $i++ if $i < $n_windows_required;
     # ^ Beyond Do not punish a window beyond a certain rank, for now set at this.

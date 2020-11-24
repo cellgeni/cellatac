@@ -27,6 +27,9 @@ params.mergepeaks    =  true
 params.perclusterpeaks  =  false
 params.stopatcluster =  false
 
+params.o_clusdef     =  false           // Output cluster definitions (bed files) yes/no
+params.o_winmcx      =  false           // Output cluster definitions (bed files) yes/no
+
 params.muxfile       =  null            // analyse multiple samples
 
 if ((!params.fragments || !params.cellcsv || !params.posbam) && !params.muxfile) {
@@ -483,7 +486,7 @@ process make_big_matrix {
 
   container 'quay.io/cellgeni/cellclusterer'
 
-  publishDir "${params.outdir}/cellmetadata", mode: 'link', pattern: 'cell2win.mcx'
+  publishDir "${params.outdir}/cellmetadata", mode: 'link', pattern: 'cell2win.mcx', enabled: params.o_winmcx
 
   input:
   file all_edges from ch_all_edges.toSortedList{ just_name(it) }
@@ -689,7 +692,7 @@ process clusters_merge_inputs {
 
   tag "${clustag}"
 
-  publishDir "${params.outdir}/clusdef", mode: 'link'
+  publishDir "${params.outdir}/clusdef", mode: 'link', enabled: params.o_clusdef
 
   input:
   set val(clustag), file(clusmetafile) from ch_cat_cluster_inputs

@@ -125,7 +125,7 @@ process prepare_cr_mux {     // integrate multiple fragment files
 
   container 'quay.io/cellgeni/cellclusterer'
 
-  publishDir "${params.outdir}", pattern: 'cellmetadata',   mode: 'copy'
+  publishDir "${params.outdir}/mux/$sampleid/", pattern: 'cellmetadata/*',   mode: 'copy'
 
   when: (!params.mermul) && (!params.posbam) && (params.muxfile)
 
@@ -140,7 +140,8 @@ process prepare_cr_mux {     // integrate multiple fragment files
   file("cellmetadata/${sampleid}.names")  into ch_cellnames_many_cr
   file('cellmetadata/*-sample.chrlen')    into ch_chrom_length_many_cr
   file('cellmetadata/*-win.tab')          into ch_wintab_many_cr
-  file("cellmetadata/${sampleid}.info")   into ch_cellinfo_many_cr
+  file("cellmetadata/${sampleid}.info_tagged") into ch_cellinfo_many_cr
+  file("cellmetadata/${sampleid}.map")    into ch_tagmap_many_cr
   set val(sampletag), file("*.fragments.gz"), file('c_c.*') into ch_demux_many_cr
 
   shell:
@@ -172,11 +173,13 @@ process prepare_cr_mux {     // integrate multiple fragment files
 
 # Names + info of selected cells.
 # fixme '10th field (nine with zero-offset)' is very brittle; 
-  perl -F, -ane 's/,/\t/g; print "!{sampletag}-$_" if $F[9] == 1' $cellfile \\
-     | (sort -rnk 2 || true) | !{filter} > cellmetadata/!{sampleid}.info
+  perl -F, -ane 's/,/\\t/g; print if $F[9] == 1' $cellfile \\
+     | (sort -rnk 2 || true) | !{filter} > cellmetadata/!{sampleid}.base
+  perl -ne 'print "!{sampletag}-$_"' cellmetadata/!{sampleid}.base > cellmetadata/!{sampleid}.info_tagged
+  perl -ane 'chomp; print "!{sampletag}-$F[0]\\t!{sampleid}-$F[0]\\n"'  cellmetadata/!{sampleid}.base > cellmetadata/!{sampleid}.map
 
 # Just the names of selected cells. 
-  cut -f 1 cellmetadata/!{sampleid}.info | sort > cellmetadata/!{sampleid}.names
+  cut -f 1 cellmetadata/!{sampleid}.info_tagged | sort > cellmetadata/!{sampleid}.names
 
 # Batch lists for demuxing
   split -l !{cellbatchsize} cellmetadata/!{sampleid}.names c_c.
@@ -263,16 +266,19 @@ process join_muxfiles {
 // fixme: I've duplicated the when: from prepare_cr_mux here, but need proper understanding.
 
   publishDir "${params.outdir}/cellmetadata", pattern: 'singlecell.tsv',   mode: 'link'
+  publishDir "${params.outdir}/cellmetadata", pattern: 'tagmap.txt',   mode: 'link'
 
   when: (!params.mermul) && (!params.posbam) && (params.muxfile)
 
   input:
   file(fnames) from ch_cellnames_many_cr.toSortedList { just_name(it) }
   file(fninfo) from ch_cellinfo_many_cr.toSortedList { just_name(it) }
+  file(fmap)  from ch_tagmap_many_cr.toSortedList { just_name(it) }
 
   output:
   file('merged.tab') into ch_celltab_manymerged_cr
   file('singlecell.tsv') into ch_cellfile_mux
+  file('tagmap.txt')
 
   shell:
   '''
@@ -281,6 +287,7 @@ process join_muxfiles {
 # fixme brittle header/data coupling.
   echo -e "barcode\\ttotal\\tduplicate\\tchimeric\\tunmapped\\tlowmapq\\tmitochondrial\\tpassed_filters\\tcell_id\\tis__cell_barcode\\tTSS_fragments\\tDNase_sensitive_region_fragments\\tenhancer_region_fragments\\tpromoter_region_fragments\\ton_target_fragments\\tblacklist_region_fragments\\tpeak_region_fragments\\tpeak_region_cutsites" > singlecell.tsv
   cat !{fninfo} >> singlecell.tsv
+  cat !{fmap} >> tagmap.txt
   '''
 }
 

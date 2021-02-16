@@ -9,7 +9,7 @@ if (is.null(fninput)) {
   stopifnot(FALSE)
 }
 
-a <- read.table(fninput, check.names=F, sep="\t", header=T, as.is=T, quote="", comment.char="")
+a <- read.table(fninput, check.names=F, sep=",", header=T, as.is=T, quote="", comment.char="")
 
 a$ATAC_passed_filters <- a$atac_raw_reads - a$atac_dup_reads - a$atac_chimeric_reads - a$atac_unmapped_reads -a$atac_mitochondrial_reads
 a$ATAC_cell_id <- 'None'
@@ -55,5 +55,5 @@ newnames <- names(mymap)
 a2 <- a[,newnames]
 colnames(a2) <- mymap[newnames]
 
-write.table(a2, "singlecell2.csv", quote = F, sep = ',', row.names = F, col.names = T)
+write.table(a2, "singlecell.csv", quote = F, sep = ',', row.names = F, col.names = T)
 

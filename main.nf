@@ -125,8 +125,6 @@ process prepare_cr_mux {     // integrate multiple fragment files
 
   container 'quay.io/cellgeni/cellclusterer'
 
-  publishDir "${params.outdir}/mux/$sampleid/", pattern: 'cellmetadata/*',   mode: 'copy'
-
   when: (!params.mermul) && (!params.posbam) && (params.muxfile)
 
   input:
@@ -172,8 +170,7 @@ process prepare_cr_mux {     // integrate multiple fragment files
   ca_make_chromtab.pl !{winsize} cellmetadata/!{sampletag}-sample.chrlen > cellmetadata/!{sampletag}-win.tab
 
 # Names + info of selected cells.
-# fixme '10th field (nine with zero-offset)' is very brittle; 
-  perl -F, -ane 's/,/\\t/g; print if $F[9] == 1' $cellfile \\
+  get-col.py -i $cellfile -s ',' -c is__cell_barcode -f 1 -H -o $'\t' \\
      | (sort -rnk 2 || true) | !{filter} > cellmetadata/!{sampleid}.base
   perl -ne 'print "!{sampletag}-$_"' cellmetadata/!{sampleid}.base > cellmetadata/!{sampleid}.info_tagged
   perl -ane 'chomp; print "!{sampletag}-$F[0]\\t!{sampleid}-$F[0]\\n"'  cellmetadata/!{sampleid}.base > cellmetadata/!{sampleid}.map

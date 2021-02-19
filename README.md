@@ -276,7 +276,6 @@ The bed files in `peaks` are `allclusters_peaks_sorted.bed` and
 position-sorted list of all per-cluster peaks.  The second is the result of
 merging these peaks so that overlapping and book-ended peaks are joined in a
 single peak. The infix `sps` indicates it is sample-position-sorted, indicating
-we use the chromosome order as found in the cellranger bam file.  This infix is
-both immaterial and a feeble naming construct, and can be safely ignored.
+we use the chromosome order as found in the cellranger bam file.
 
 

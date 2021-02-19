@@ -1,16 +1,16 @@
 # cellatac
 
-1. [Introction](#Introction)
-2. [Basic workflow](#Basic_workflow)
-3. [Cellatac functionality](#Cellatac_functionality)
-4. [Running cellatac](#Running_cellatac)
-    4.1 [Cellatac needs](#Cellatac_needs)
-    4.2 [Useful options](#Useful_options)
-    4.3 [Example invocations](#Example_invocations)
-5. [Downstream analysis](#Downstream_analysis)
-6. [Outputs](#Outputs)
+1. [Introduction](#introduction)
+2. [Basic workflow](#basic_workflow)
+3. [Cellatac functionality](#cellatac_functionality)
+4. [Running cellatac](#running_cellatac)
+    - [Cellatac needs](#cellatac_needs)
+    - [Useful options](#useful_options)
+    - [Example invocations](#example_invocations)
+5. [Downstream analysis](#downstream_analysis)
+6. [Outputs](#outputs)
 
-## Introction
+## Introduction
 
 Sanger Cellular Genetics ATAC-seq pipeline by Luz Garcia Alonso, Ni Huang and Stijn van Dongen.
 

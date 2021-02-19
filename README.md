@@ -188,8 +188,8 @@ The snippet below shows how to read in cellatac output as a Seurat object.
 ```
 ### Load scATAC binary matrix
 # This is analogous to the gene expression count matrix used to analyze single-cell RNA-seq. 
-# However, instead of genes, each row of the matrix represents a window of the genome. 
-# The matrix is not binary, > 0 if there is any Tn5 cut site for each single barcode (i.e. cell) that map within each window.
+# However, instead of genes, each row of the matrix represents a PEAK of the genome learned by cellatac. 
+# The matrix is not binary, > 0 if there is any Tn5 cut site for each single barcode (i.e. cell) that map within each peak.
 f_binary_mat <- readMM(file = paste0(cellatac_dir, 'peak_matrix/peaks_bc_matrix.mmtx.gz'))
 regions.names = read.delim(paste0(cellatac_dir, 'peak_matrix/peaks.txt'), header = FALSE, stringsAsFactors = FALSE)
 cells.names = read.delim(paste0(cellatac_dir, 'peak_matrix/bc.txt'), header = FALSE, stringsAsFactors = FALSE)
@@ -199,7 +199,34 @@ rownames(f_binary_mat) = regions.names$V1
 # Make binary
 f_binary_mat@x[f_binary_mat@x > 0] <- 1
 
-# creating CreateSeuratObject
+### Get some stats
+# check distributions
+message('Matrix size:\n', 'rows ', f_binary_mat@Dim[1], '\ncolumns ', f_binary_mat@Dim[2])
+n_cells_with_site = rowSums(f_binary_mat)
+options(repr.plot.width = 8, repr.plot.height = 4)
+par(mfrow = c(1, 2))
+hist(log10(n_cells_with_site), main = 'No. of Cells Each Site is Observed In', breaks = 50)
+hist(n_cells_with_site, main = 'No. of Cells Each Site is Observed In', breaks = 50)
+
+sites_per_cell = colSums(f_binary_mat)
+options(repr.plot.width = 8, repr.plot.height = 4)
+par(mfrow = c(1, 2))
+hist(log10(sites_per_cell), main = 'No. of Sites Observed per Cell', breaks = 50)
+hist(sites_per_cell, main = 'No. of Sites Observed per Cell', breaks = 50)
+
+# compare coverage vs peak length 
+pos = sapply(strsplit(rownames(f_binary_mat), split= ':'), tail , 1)
+pos_len = sapply(strsplit(pos, split= '-'), function(x) as.numeric(x[2])-as.numeric(x[1]) )
+par(mfrow = c(1, 1))
+plot(pos_len, n_cells_with_site)
+abline(v = f_binary_mat@Dim[2]*0.75)
+
+
+# filter non-informative peaks: length < 2k bp or >75% frequency
+f_binary_mat = f_binary_mat[ pos_len < 2000 & n_cells_with_site < f_binary_mat@Dim[2]*0.75, ]
+
+
+# create CreateSeuratObject
 chrom_assay <- CreateChromatinAssay(
   counts = f_binary_mat,
   sep = c(":", "-"),

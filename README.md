@@ -1,13 +1,13 @@
 # cellatac
 
 1. [Introduction](#introduction)
-2. [Basic workflow](#basic_workflow)
-3. [Cellatac functionality](#cellatac_functionality)
-4. [Running cellatac](#running_cellatac)
-    - [Cellatac needs](#cellatac_needs)
-    - [Useful options](#useful_options)
-    - [Example invocations](#example_invocations)
-5. [Downstream analysis](#downstream_analysis)
+2. [Basic workflow](#basic-workflow)
+3. [Cellatac functionality](#cellatac-functionality)
+4. [Running cellatac](#running-cellatac)
+    - [Cellatac needs](#cellatac-needs)
+    - [Useful options](#useful-options)
+    - [Example invocations](#example-invocations)
+5. [Downstream analysis](#downstream-analysis)
 6. [Outputs](#outputs)
 
 ## Introduction

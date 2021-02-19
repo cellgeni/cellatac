@@ -89,7 +89,7 @@ when using the local executor, e.g.
 ```
 singularity {
   runOptions = '-B /some/path1 -B /another/path2'
-	cacheDir = '/home/jovyan/singularity/'
+  cacheDir = '/home/jovyan/singularity/'
 }
 
 executor {
@@ -181,14 +181,14 @@ The most import outputs are described below. Cellatac creates a toplevel
 output directory by default called 'results' (change with the `--outdir` option).
 
 ```
-results/qc/seurat-clades.tsv 				(cluster annotation)
-results/qc/seurat.pdf 							(cluster-annotated and sample-annotated UMAP plots)
+results/qc/seurat-clades.tsv        (cluster annotation)
+results/qc/seurat.pdf               (cluster-annotated and sample-annotated UMAP plots)
 results/peak_matrix/bc.txt                    (barcode(cell) labels)
 results/peak_matrix/peaks.txt                 (peak labels)
-results/peak_matrix/peaks_bc_matrix.mmtx.gz 	(main output object)
+results/peak_matrix/peaks_bc_matrix.mmtx.gz   (main output object)
 results/peak_matrix/bc_peaks_matrix.mmtx.gz   (transpose of above)
-results/cellmetadata/singlecell.tsv 					(joined metadata)
-results/cellmetadata/tagmap.txt 							(links two-digit sampletag and samplename)
+results/cellmetadata/singlecell.tsv           (joined metadata)
+results/cellmetadata/tagmap.txt               (links two-digit sampletag and samplename)
 ```
 
 The list of all directories with a short description:

@@ -850,6 +850,8 @@ process make_subset_peakmatrix {
   bedtools sort -faidx !{sample_chrlen} -i clusterpeak.bed > clusterpeak_sps.bed
           # ^ similar to peaks_makemasterlist; we only need the selection of columns and sorting
 
+  > peak.inputs
+  > cellnames.txt
 
   while read cellname celldef; do
     bedtools coverage               \\
@@ -857,12 +859,12 @@ process make_subset_peakmatrix {
     -b $celldef -sorted -header     \\
     -g !{sample_chrlen} | awk -F"\t" '{if($4>0) print $0}' > $cellname.mp.txt
 
-    echo -e "$cellname\t$cellname.mp.txt" >> peak.inputs
+    echo "$cellname.mp.txt" >> peak.inputs
+    echo "$cellname" >> cellnames.txt
+
           # construct this file within-process.
   done < !{clusmetafile}
   cut -f 1 peak.inputs > cellnames.txt
-          # idem construct this within-process.
-          # ^ similar to cells_masterlist_coverage 
 
   ca_peak_matrix.sh -c cellnames.txt -p clusterpeak_sps.bed -i peak.inputs -x "!{clustag}."
           # ^ similar to make_master_peakmatrix

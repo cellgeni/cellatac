@@ -864,7 +864,6 @@ process make_subset_peakmatrix {
 
           # construct this file within-process.
   done < !{clusmetafile}
-  cut -f 1 peak.inputs > cellnames.txt
 
   ca_peak_matrix.sh -c cellnames.txt -p clusterpeak_sps.bed -i peak.inputs -x "!{clustag}."
           # ^ similar to make_master_peakmatrix

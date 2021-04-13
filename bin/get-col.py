@@ -17,12 +17,12 @@ my_parser.add_argument("-H", action="store_false", help="should header be printe
 args = my_parser.parse_args()
 
 if args.colname is None:
-  print('Error: Column name is not specified')
-  sys.exit()
+  print('Error: Column name is not specified', file=sys.stderr)
+  sys.exit(1)
 
 if args.field_value is None:
-  print('Error: Value to get the data is not specified')
-  sys.exit()
+  print('Error: Value to get the data is not specified', file=sys.stderr)
+  sys.exit(1)
 
 if args.input and args.input != '-':
     input_file = open(args.input)
@@ -42,8 +42,8 @@ if len(header_line) == 1:
 try:
   position = header_line.index(colname)
 except ValueError:
-  print("Error: Column name '%s' not found" % colname)
-  sys.exit()
+  print("Error: Column name '%s' not found" % colname, file=sys.stderr)
+  sys.exit(1)
 else:
   if args.H == True:
     print(outsep.join(header_line))

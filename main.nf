@@ -477,7 +477,7 @@ Need to create these outputs, as they are currently hardcoded in seurat script (
 
   mkdir mmtx
   ca_make_mmtx.sh -r win.names -c cell.names -m w2c.ri.mcx \\
-      -e $n_entries -t pattern -o mmtx/filtered_window_bc_matrix.mmtx.gz
+      -e $n_entries -t integer -o mmtx/filtered_window_bc_matrix.mmtx.gz
   ln win.names    filtered_win.txt
   ln win.names    mmtx/regions.names
   ln cell.names   filtered_bc.txt

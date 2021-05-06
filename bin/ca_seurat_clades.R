@@ -11,15 +11,11 @@ do_clip <- is.null(theargs$noclip)      # with contortion apologies.
 # cell.names  filtered_cell.stats  filtered_window_bc_matrix.mmtx.gz  regions.names  win.stats
 
 ### Load cellATAC windows binary matrix
-f_binary_mat <- readMM(file = 'mmtx/filtered_window_bc_matrix.mmtx.gz')
+f_binary_mat <- as(readMM(file = 'mmtx/filtered_window_bc_matrix.mmtx.gz'), "dgCMatrix")
 regions.names = read.delim('mmtx/regions.names', header = FALSE, stringsAsFactors = FALSE)
 cell.names = read.delim('mmtx/cell.names', header = FALSE, stringsAsFactors = FALSE)
 colnames(f_binary_mat) = cell.names$V1
 rownames(f_binary_mat) = regions.names$V1
-
-### Make binary: 1 if there is any Tn5 cut site for each single barcode that map within each window
-if( class(f_binary_mat) != 'ngTMatrix')
-  f_binary_mat@x[f_binary_mat@x > 0] <- 1
 
 ### Load cell calling from cellranger - Seurat likes this
 metadata <- read.csv(file = 'singlecell.csv', header = TRUE, row.names=1, sep="\t")

@@ -31,6 +31,7 @@ params.o_clusdef     =  false           // Output cluster definitions (bed files
 params.o_winmcx      =  false           // Output cluster definitions (bed files) yes/no
 
 params.muxfile       =  null            // analyse multiple samples
+params.chrtag        =  'chr'
 
 if ((!params.fragments || !params.cellcsv || !params.posbam) && !params.muxfile) {
   exit 1, "Please supply --fragments <CR-fragment-file> --cellcsv <CR-cellcsv-file> --posbam <CR-posbam-file>"
@@ -88,7 +89,7 @@ process prepare_cr_single {
   samtools view -H !{posbam}   \\
     | grep '@SQ'$'\\t''SN:'    \\
     | perl -ne '/\\bSN:(\\S+)/ && ($name=$1); /\\bLN:(\\d+)/ && ($len=$1); print "$name\\t$len\\n";' \\
-    | grep -i 'chr[a-z0-9][a-z0-9]*\\>' \\
+    | grep -i '!{params.chrtag}[a-z0-9_][a-z0-9_]*\\>' \\
     | sort -k 1,1V -k 2,2n     \\
     | uniq                     \\
     > cellmetadata/sample.chrlen
@@ -160,7 +161,7 @@ process prepare_cr_mux {     // integrate multiple fragment files
   samtools view -H $bamfile    \\
     | grep '@SQ'$'\\t''SN:'    \\
     | perl -ne '/\\bSN:(\\S+)/ && ($name=$1); /\\bLN:(\\d+)/ && ($len=$1); print "$name\\t$len\\n";' \\
-    | grep -i 'chr[a-z0-9][a-z0-9]*\\>' \\
+    | grep -i '!{params.chrtag}[a-z0-9_][a-z0-9_]*\\>' \\
     | sort -k 1,1V -k 2,2n     \\
     | uniq                     \\
     > cellmetadata/!{sampletag}-sample.chrlen
@@ -220,7 +221,7 @@ process prepare_mm {        // merge multiplets
   samtools view -H !{posbam}   \\
     | grep '@SQ'$'\\t''SN:'    \\
     | perl -ne '/\\bSN:(\\S+)/ && ($name=$1); /\\bLN:(\\d+)/ && ($len=$1); print "$name\\t$len\\n";' \\
-    | grep -i 'chr[a-z0-9][a-z0-9]*\\>' \\
+    | grep -i '!{params.chrtag}[a-z0-9_][a-z0-9_]*\\>' \\
     | sort -k 1,1V -k 2,2n     \\
     | uniq
     > cellmetadata/sample.chrlen.all
@@ -228,7 +229,7 @@ process prepare_mm {        // merge multiplets
 # get the main chromosomes. WARNING DANGERSIGN very crude regular expression filter.
 # This filter basically avoids underscores and allows otherwise alphanumerical.
 # TODO print joined string of all chromosomes for user perusal.
-  grep -i 'chr[a-z0-9][a-z0-9]*\\>' cellmetadata/sample.chrlen.all > cellmetadata/sample.chrlen
+  grep -i '!{params.chrtag}[a-z0-9_][a-z0-9_]*\\>' cellmetadata/sample.chrlen.all > cellmetadata/sample.chrlen
 
 #
   extract-fragments !{posbam} fragmints.tsv.gz !{task.cpus}

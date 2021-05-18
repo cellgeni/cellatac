@@ -32,6 +32,7 @@ params.o_winmcx      =  false           // Output cluster definitions (bed files
 
 params.muxfile       =  null            // analyse multiple samples
 params.chrtag        =  'chr'
+params.macs2_genomesize  =  '2.7e9'
 
 if ((!params.fragments || !params.cellcsv || !params.posbam) && !params.muxfile) {
   exit 1, "Please supply --fragments <CR-fragment-file> --cellcsv <CR-cellcsv-file> --posbam <CR-posbam-file>"
@@ -739,7 +740,7 @@ process clusters_macs2 {
 
   outdir=macs2.!{clustag}.out
   mkdir -p $outdir
-  macs2 callpeak -t !{clusregionfile} -g 2.7e9 -n !{clustag} --outdir . -f AUTO \\
+  macs2 callpeak -t !{clusregionfile} -g !{params.macs2_genomesize} -n !{clustag} --outdir . -f AUTO \\
      --nomodel     \\
      --shift -100  \\
      --extsize 200 \\

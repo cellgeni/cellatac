@@ -2,6 +2,7 @@
 
 params.fragments     =  null            // CR fragments file.
 params.posbam        =  null            // CR possorted bam file.
+params.chromlen      =  null            // File with names of chromosomes.
 params.ncell         =  0               // Can be set for testing purposes; suggest using a
                                         // sampled fragment file, e.g.
 // zcat fragments.tsv.gz | perl -ne 'print if $. % 11 == 0;' | gzip > fragments11.tsv.gz
@@ -31,11 +32,13 @@ params.o_clusdef     =  false           // Output cluster definitions (bed files
 params.o_winmcx      =  false           // Output cluster definitions (bed files) yes/no
 
 params.muxfile       =  null            // analyse multiple samples
-params.chrtag        =  'chr'
 params.macs2_genomesize  =  '2.7e9'
 
 if ((!params.fragments || !params.cellcsv || !params.posbam) && !params.muxfile) {
   exit 1, "Please supply --fragments <CR-fragment-file> --cellcsv <CR-cellcsv-file> --posbam <CR-posbam-file>"
+}
+if (!params.chromlen) {
+  exit 1, "Please supply --chromlen <chr-names-file>"
 }
 
 
@@ -46,9 +49,13 @@ ch_mux     = params.muxfile && !params.mermul ? Channel.fromPath(params.muxfile)
 ch_cellfile = params.cellcsv    ? Channel.fromPath(params.cellcsv)   : Channel.empty()
 ch_fragfile_cr = params.fragments  ? Channel.fromPath(params.fragments) : Channel.empty()
 ch_bamfile  = params.posbam     ? Channel.fromPath(params.posbam)    : Channel.empty()
+ch_chrlen   = Channel.fromPath(params.chromlen)
 
 ch_cellfile.into { ch_cellfile_param; ch_cellfile_param2; }
 ch_bamfile.into  { ch_bamfile_param; ch_bamfile_param2 }
+
+/* below umm yes is unsightly. DSL2 will help, should we port this to it */
+ch_chrlen.into { ch_chrom_length_cr_single; ch_chrom_length_cr_mux; ch_chrom_length_mm; ch_chrom_length; ch_chrom_length2; ch_chrom_length3; ch_chrom_length4 }
 
 /*
 thefragfile = params.fragments ? file(params.fragments) : null
@@ -72,13 +79,13 @@ process prepare_cr_single {
   input:
   file(f_cells) from ch_cellfile_param.collect()
   file(posbam) from ch_bamfile_param.collect()
+  file(f_chromlen) from ch_chrom_length_cr_single.collect()
   val cellbatchsize from params.cellbatchsize
   val winsize from params.winsize
 
   output:
   file('cellmetadata/cells.tab')    into ch_celltab_cr
   file('cellmetadata/win.tab')      into ch_wintab_cr
-  file('cellmetadata/sample.chrlen')    into ch_chrom_length_cr
   file('cellmetadata/singlecell.tsv')   into ch_cellfile_single
   set val("crsingle"), file('c_c.*') into ch_demux_cr
 
@@ -86,15 +93,6 @@ process prepare_cr_single {
   filter = params.ncell > 0 ? "head -n ${params.ncell}" : "cat"
   '''
   mkdir -p cellmetadata
-# Chrosome length file.
-  samtools view -H !{posbam}   \\
-    | grep '@SQ'$'\\t''SN:'    \\
-    | perl -ne '/\\bSN:(\\S+)/ && ($name=$1); /\\bLN:(\\d+)/ && ($len=$1); print "$name\\t$len\\n";' \\
-    | grep -i '!{params.chrtag}[a-z0-9_][a-z0-9_]*\\>' \\
-    | sort -k 1,1V -k 2,2n     \\
-    | uniq                     \\
-    > cellmetadata/sample.chrlen
-        # grep -> WARNING DANGERSIGN fixme (see other locations)
 
 # Names + info of selected cells.
 # fixme '10th field (nine with zero-offset)' is very brittle; 
@@ -111,7 +109,7 @@ process prepare_cr_single {
   split -l !{cellbatchsize} cellmetadata/cell.names c_c.
 
 # Tab file for windows
-  ca_make_chromtab.pl !{winsize} cellmetadata/sample.chrlen > cellmetadata/win.tab
+  ca_make_chromtab.pl !{winsize} !{f_chromlen} > cellmetadata/win.tab
 
 # Subselect what we need from singlecell.tsv file.
 # fixme brittle header/data coupling.
@@ -130,6 +128,7 @@ process prepare_cr_mux {     // integrate multiple fragment files
   when: (!params.mermul) && (!params.posbam) && (params.muxfile)
 
   input:
+  file(f_chromlen) from ch_chrom_length_cr_mux.collect()
   set val(sampletag), val(sampleid), val(root) from ch_mux
         .splitCsv(sep: '\t')
         .view{"manifest: $it"}
@@ -138,7 +137,6 @@ process prepare_cr_mux {     // integrate multiple fragment files
 
   output:
   file("cellmetadata/${sampleid}.names")  into ch_cellnames_many_cr
-  file('cellmetadata/*-sample.chrlen')    into ch_chrom_length_many_cr
   file('cellmetadata/*-win.tab')          into ch_wintab_many_cr
   file("cellmetadata/${sampleid}.info_tagged") into ch_cellinfo_many_cr
   file("cellmetadata/${sampleid}.map")    into ch_tagmap_many_cr
@@ -148,28 +146,16 @@ process prepare_cr_mux {     // integrate multiple fragment files
   filter = params.ncell > 0 ? "head -n ${params.ncell}" : "cat"
   '''
 # make fragments, bam, manifest available
-  bamfile=!{sampleid}.bam
   fragfile=!{sampleid}.fragments.gz               # output; not used below
   cellfile=!{sampleid}.singlecell.csv
 
-  ln -s !{root}/possorted_bam.bam $bamfile
   ln -s !{root}/fragments.tsv.gz $fragfile
   ln -s !{root}/singlecell.csv $cellfile
 
   mkdir -p cellmetadata
 
-# Chrosome length file.
-  samtools view -H $bamfile    \\
-    | grep '@SQ'$'\\t''SN:'    \\
-    | perl -ne '/\\bSN:(\\S+)/ && ($name=$1); /\\bLN:(\\d+)/ && ($len=$1); print "$name\\t$len\\n";' \\
-    | grep -i '!{params.chrtag}[a-z0-9_][a-z0-9_]*\\>' \\
-    | sort -k 1,1V -k 2,2n     \\
-    | uniq                     \\
-    > cellmetadata/!{sampletag}-sample.chrlen
-        # grep -> WARNING DANGERSIGN fixme (see other locations)
-
 # Tab file for windows
-  ca_make_chromtab.pl !{winsize} cellmetadata/!{sampletag}-sample.chrlen > cellmetadata/!{sampletag}-win.tab
+  ca_make_chromtab.pl !{winsize} !{f_chromlen} > cellmetadata/!{sampletag}-win.tab
 
 # Names + info of selected cells.
   get-col.py -i $cellfile -s ',' -c is__cell_barcode -f 1 -H -o $'\t' \\
@@ -205,38 +191,25 @@ process prepare_mm {        // merge multiplets
   input:
   file(f_cells) from ch_cellfile_param2.collect()
   file(posbam) from ch_bamfile_param2.collect()
+  file(f_chromlen) from ch_chrom_length_mm.collect()
+
   val cellbatchsize from params.cellbatchsize
   val winsize from params.winsize
 
   output:
   file('cellmetadata/cells.tab')    into ch_celltab_mm
   file('cellmetadata/win.tab')      into ch_wintab_mm
-  file('cellmetadata/sample.chrlen')    into ch_chrom_length_mm
-
   set val("mm"), file('fragmints2.tsv.gz'), file('c_c.*') into ch_demux_mm
 
   shell:
   '''
   mkdir -p cellmetadata
-# Chrosome length file.
-  samtools view -H !{posbam}   \\
-    | grep '@SQ'$'\\t''SN:'    \\
-    | perl -ne '/\\bSN:(\\S+)/ && ($name=$1); /\\bLN:(\\d+)/ && ($len=$1); print "$name\\t$len\\n";' \\
-    | grep -i '!{params.chrtag}[a-z0-9_][a-z0-9_]*\\>' \\
-    | sort -k 1,1V -k 2,2n     \\
-    | uniq
-    > cellmetadata/sample.chrlen.all
-
-# get the main chromosomes. WARNING DANGERSIGN very crude regular expression filter.
-# This filter basically avoids underscores and allows otherwise alphanumerical.
-# TODO print joined string of all chromosomes for user perusal.
-  grep -i '!{params.chrtag}[a-z0-9_][a-z0-9_]*\\>' cellmetadata/sample.chrlen.all > cellmetadata/sample.chrlen
 
 #
   extract-fragments !{posbam} fragmints.tsv.gz !{task.cpus}
 
 #
-  merge-multiplets --chrom cellmetadata/sample.chrlen --max-n !{params.nbcest} --debug --outfrg fragmints2.tsv.gz fragmints.tsv.gz cellmetadata/bc-mm.map
+  merge-multiplets --chrom !{f_chromlen} --max-n !{params.nbcest} --debug --outfrg fragmints2.tsv.gz fragmints.tsv.gz cellmetadata/bc-mm.map
 
 # Just the names of selected cells.
   cut -f 2 cellmetadata/bc-mm.map | sort -u > cellmetadata/cell.names
@@ -248,7 +221,7 @@ process prepare_mm {        // merge multiplets
   split -l !{cellbatchsize} cellmetadata/cell.names c_c.
 
 # Tab file for windows
-  ca_make_chromtab.pl !{winsize} cellmetadata/sample.chrlen > cellmetadata/win.tab
+  ca_make_chromtab.pl !{winsize} !{f_chromlen} > cellmetadata/win.tab
   '''
 }
 
@@ -313,10 +286,6 @@ process join_muxfiles {
     .mix(ch_wintab_cr, ch_wintab_mm)
     .into { ch_wintab; ch_wintab2; ch_wintab3; ch_wintab4 }
 
-  ch_chrom_length_many_cr.toSortedList { just_name(it) }.flatten().first()
-    .mix(ch_chrom_length_cr, ch_chrom_length_mm)
-    .into { ch_chrom_length; ch_chrom_length2; ch_chrom_length3; ch_chrom_length4 }
-
   ch_fragfile_cr.map { fragf -> [ "crsingle", fragf ] }
     .join(ch_demux_cr)
     .mix(ch_demux_mm, ch_demux_many_cr)           // fixme this block is a bit convoluted
@@ -330,7 +299,7 @@ process sample_demux {
 
   input:
   set val(sampletag), file(frags), file(cells) from ch_demux_batch.view{"sample_demux: $it"}
-  file(chromo) from ch_chrom_length4.collect()
+  file(f_chromlen) from ch_chrom_length4.collect()
 
   output:
   file('*celldata/[ACGT][ACGT][ACGT][ACGT]/*.bed') into ch_demuxed
@@ -348,7 +317,7 @@ process sample_demux {
   fi
   mkdir -p $dir
   chromfile=my.!{sampletag}.chromo.txt
-  cut -f 1 !{chromo} > $chromfile
+  cut -f 1 !{f_chromlen} > $chromfile
   zcat !{frags} | samdemux.pl --chromofile=$chromfile --barcodefile=!{cells} --outdir=$dir --bucket --fragments --ntest=0 --fnedges=mtx.!{thesampletag}-!{batchtag}.edges --tag=!{thesampletag}
   '''
 }
@@ -761,7 +730,7 @@ process peaks_make_masterlist {
 
   input:
   file np_files from ch_combine_clusterpeaks.map { it[1] }.toSortedList { just_name(it) }
-  file sample_idxstats from ch_chrom_length.collect()
+  file f_chromlen from ch_chrom_length.collect()
 
   output:
   file('allclusters_peaks_sorted.bed')
@@ -776,7 +745,7 @@ process peaks_make_masterlist {
   bedtools merge -i allclusters_peaks_sorted.bed -d 0 > allclusters_masterlist.bed
 
   # Note moved this step from P6 to here. sps == sample-pos-sorted, sorted according to sample bam.
-  bedtools sort -faidx !{sample_idxstats} -i allclusters_masterlist.bed > allclusters_masterlist_sps.bed
+  bedtools sort -faidx !{f_chromlen} -i allclusters_masterlist.bed > allclusters_masterlist_sps.bed
   '''
 }
 
@@ -794,7 +763,7 @@ process cells_masterlist_coverage {
 
   input:
   file(masterbed_sps) from ch_masterbed_sps.collect()
-  file sample_chrlen from ch_chrom_length2.collect()
+  file f_chromlen from ch_chrom_length2.collect()
 
   file(celldef_list) from ch_cellpaths_masterpeakcov
     .toSortedList { just_name(it) }
@@ -813,7 +782,7 @@ process cells_masterlist_coverage {
     bedtools coverage               \\
     -a !{masterbed_sps}             \\
     -b $celldef -sorted -header     \\
-    -g !{sample_chrlen} | awk -F"\t" '{if($4>0) print $0}' > $cellname.mp.txt
+    -g !{f_chromlen} | awk -F"\t" '{if($4>0) print $0}' > $cellname.mp.txt
   done < !{celldef_list}
   '''
 }
@@ -831,7 +800,7 @@ process make_subset_peakmatrix {
 
   input:
   set val(clustag), file(clusmetafile), file(npeakfile) from ch_per_cluster_inputs.join(ch_per_cluster_analysis)
-  file sample_chrlen from ch_chrom_length3.collect()
+  file f_chromlen from ch_chrom_length3.collect()
 
   output:
     // file('cell2peak.gz')
@@ -849,7 +818,7 @@ process make_subset_peakmatrix {
   fi
   cut -f 1-3 !{npeakfile} | sort -k1,1V -k2,2n -k 3,3n > clusterpeak.bed
 
-  bedtools sort -faidx !{sample_chrlen} -i clusterpeak.bed > clusterpeak_sps.bed
+  bedtools sort -faidx !{f_chromlen} -i clusterpeak.bed > clusterpeak_sps.bed
           # ^ similar to peaks_makemasterlist; we only need the selection of columns and sorting
 
   > peak.inputs
@@ -859,7 +828,7 @@ process make_subset_peakmatrix {
     bedtools coverage               \\
     -a clusterpeak_sps.bed          \\
     -b $celldef -sorted -header     \\
-    -g !{sample_chrlen} | awk -F"\t" '{if($4>0) print $0}' > $cellname.mp.txt
+    -g !{f_chromlen} | awk -F"\t" '{if($4>0) print $0}' > $cellname.mp.txt
 
     echo "$cellname.mp.txt" >> peak.inputs
     echo "$cellname" >> cellnames.txt

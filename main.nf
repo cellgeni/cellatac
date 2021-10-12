@@ -582,7 +582,7 @@ process seurat_clustering {
   shell:
   noclip = params.clip_SVD ? "" : "--noclip"
   '''
-  R --no-save !{noclip} < !{baseDir}/bin/ca_seurat_clades.R
+  R --no-save --args !{noclip} < !{baseDir}/bin/ca_seurat_clades.R
   #ln -s !{baseDir}/bin/cusanovich2018_lib.r .
   #R --slave --quiet --no-save --args  \\
   #--nclades=!{nclades}                \\

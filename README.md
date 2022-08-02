@@ -12,8 +12,8 @@
 
 ## Introduction
 
-Sanger Cellular Genetics ATAC-seq pipeline by Luz Garcia Alonso, Ni Huang and
-Stijn van Dongen.
+Sanger Cellular Genetics ATAC-seq pipeline by Luz Garcia Alonso,
+Simon Murray, Ni Huang and Stijn van Dongen.
 
 **cellatac** takes scATAC-seq aligned data (such as the fragments file from
 Cell Ranger ATAC) and outputs a _count matrix of accessible chromatin peaks by

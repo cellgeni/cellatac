@@ -582,18 +582,36 @@ process seurat_clustering {
   shell:
   noclip = params.clip_SVD ? "" : "--noclip"
   '''
-  R --no-save !{noclip} < !{baseDir}/bin/ca_seurat_clades.R
-  #ln -s !{baseDir}/bin/cusanovich2018_lib.r .
-  #R --slave --quiet --no-save --args  \\
-  #--nclades=!{nclades}                \\
-  #--npcs=!{npcs}                      \\
-  #--matrix=inputs/filtered_window_bc_matrix.mmtx.gz  \\
-  #--regionnames=inputs/regions.names  \\
-  #--cellnames=inputs/cell.names      \\
-  #--winstats=inputs/win.stats         \\
-  #--cellstats=inputs/filtered_cell.stats  \\
-  #--sampleid=!{sampleid}              \\
-  #< !{baseDir}/bin/cluster_cells_cusanovich2018.R
+  R --no-save --args !{noclip} < !{baseDir}/bin/ca_seurat_clades.R
+  '''
+}
+
+
+process episcanpy_clustering {
+
+  tag "episcanpy2021"
+
+  container = '/lustre/scratch117/cellgen/cellgeni/TIC-atacseq/tic-1175/actions/epi_0.6.sif'
+
+  publishDir "$params.outdir/qc", mode: 'link'
+
+  when: params.usecls == '__episcanpy__'
+
+  input:
+  val nclades   from  params.nclades
+  val sampleid  from  params.sampleid
+  val npcs      from  params.npcs
+  file('singlecell.csv') from ch_cellfile_single.mix(ch_cellfile_mux).collect()
+  file('mmtx') from ch_load_mmtx2
+
+  output:
+  file('Leiden.tsv') into ch_episcanpy_clades
+  file('episcanpy_*.pdf')
+  file('figures/*.png')
+
+  shell:
+  '''
+  ca_episcanpy.py -m 0.515 -f 120000 -p !{task.cpus}
   '''
 }
 
@@ -635,7 +653,7 @@ process cusanovich_clustering {
   '''
 }
 
-ch_usercls.mix(ch_cusanovich_clades, ch_seurat_clades).set{ ch_clustering }
+ch_usercls.mix(ch_cusanovich_clades, ch_seurat_clades, ch_episcanpy_clades).set{ ch_clustering }
 
 process clusters_index {
 

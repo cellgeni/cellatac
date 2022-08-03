@@ -168,7 +168,7 @@ my @entries = ();
 
 while (<>) {
                          # write headers to each barcode file.
-  if($do_psb && /^@/){
+  if ($do_psb && /^@/){
     foreach my $fh (values %files) {
       print {$fh} $_;
     }
@@ -190,6 +190,7 @@ while (<>) {
     die "fix insertion of sampletag similar to fragments mode";
   }
   elsif ($do_fragments) {
+    next if /^#/;
     my @F = split("\t");
     die "Field count error on line [$_]" unless @F == 5;
     my ($frag_chr, $start, $end, $frag_bc, $depth) = @F;

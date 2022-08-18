@@ -17,5 +17,5 @@ RUN Rscript -e 'devtools::install_github(c("caleblareau/BuenColors", "timoast/si
 RUN apt-get install -y samtools pigz python3-pip
 RUN apt-get install -y bedtools
 
-RUN pip3 install pandas docopt
+RUN pip3 install pandas docopt leidenalg
 

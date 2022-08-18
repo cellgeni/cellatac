@@ -67,7 +67,7 @@ so <- RunUMAP(object = so, reduction = 'lsi', dims = 1:30)
 so <- FindNeighbors(object = so, reduction = 'lsi', dims = 1:30)
 
 ### Clustering
-so <- FindClusters(object = so, verbose = FALSE)
+so <- FindClusters(object = so, verbose = FALSE, algorithm = 4)
 
 ### Plot clustering and sample information
 

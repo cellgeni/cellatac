@@ -48,7 +48,6 @@ epi.pp.cal_var(adata, save='episcanpy_variability.pdf')
 epi.pl.variability_features(adata,log=None, min_score=min_score_value, nb_features=nrof_features, save='episcanpy_varfeat.pdf')
 epi.pl.variability_features(adata,log='log10', min_score=min_score_value, nb_features=nrof_features, save='episcanpy_log_varfeat.pdf')
 adata = epi.pp.select_var_feature(adata, nb_features=nrof_features, show=False, copy=True)
-# epi.tl.getNClusters(adata, n_cluster=N_clusters)
 epi.tl.leiden(adata)
 # epi.tl.getNClusters(adata, n_cluster=N_clusters, method='leiden')   # note constant.
 # umap has to be saved as .png as .pdf produces empty pdf files

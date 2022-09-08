@@ -608,6 +608,7 @@ process episcanpy_clustering {
   file('Leiden.tsv') into ch_episcanpy_clades
   file('episcanpy_*.pdf')
   file('figures/*.png')
+  file('adata*.h5ad')
 
   shell:
   '''

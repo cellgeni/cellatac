@@ -319,6 +319,14 @@ process sample_demux {
   chromfile=my.!{sampletag}.chromo.txt
   cut -f 1 !{f_chromlen} > $chromfile
   zcat !{frags} | samdemux.pl --chromofile=$chromfile --barcodefile=!{cells} --outdir=$dir --bucket --fragments --ntest=0 --fnedges=mtx.!{thesampletag}-!{batchtag}.edges --tag=!{thesampletag}
+  cd $dir
+  ls | grep -v "mtx" | while read beddir; do
+    cd $beddir
+    for bedfile in *; do
+      sort-bedfiles.sh $bedfile
+    done
+    cd ..
+  done
   '''
 }
 

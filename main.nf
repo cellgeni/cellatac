@@ -599,7 +599,7 @@ process episcanpy_clustering {
 
   tag "episcanpy2021"
 
-  container = '/nfs/cellgeni/singularity/images/epi_0.6.sif'
+  container = '/nfs/cellgeni/singularity/images/epi_0.7.sif'
 
   publishDir "$params.outdir/qc", mode: 'link'
 

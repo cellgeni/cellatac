@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import scipy.io as sci
 import scipy as ss
-import episcanpy.api as epi
+import episcanpy as epi
 import argparse
 
 min_score_value = 0.515
